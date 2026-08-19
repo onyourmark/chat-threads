@@ -142,6 +142,7 @@ describe('messages crossing an extension boundary are validated', () => {
         'provider',
         'providerConversationId',
         'providerMessageId',
+        'references',
         'role',
         'sequence',
         'timestamp',

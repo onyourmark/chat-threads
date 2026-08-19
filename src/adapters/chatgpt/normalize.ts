@@ -16,7 +16,9 @@ import type {
   Role,
   SourceConversation,
   RetrievalStatus,
+  TurnReference,
 } from '../../model/types';
+import { normalizeChatGptReferences } from './references';
 
 /**
  * Content types that are part of the conversation the user can see.
@@ -76,6 +78,7 @@ export class ChatGptFormatError extends Error {
 interface ExtractedMessage {
   text: string;
   attachments: Attachment[];
+  references: TurnReference[];
   role: Role;
   messageId?: string;
   timestamp?: string;
@@ -99,6 +102,7 @@ function extractMessage(message: unknown): ExtractedMessage | null {
   const base: ExtractedMessage = {
     text: '',
     attachments: [],
+    references: [],
     role,
     messageId: typeof message.id === 'string' ? message.id : undefined,
     timestamp: epochToIso(message.create_time),
@@ -165,7 +169,15 @@ function extractMessage(message: unknown): ExtractedMessage | null {
     });
   }
 
-  return { ...base, text: textPieces.join('\n\n'), attachments };
+  // ChatGPT writes private markers where its own interface shows a file chip.
+  // Swap them for readable text here, so no surface above the adapter ever
+  // has to know they existed.
+  const { text, references } = normalizeChatGptReferences(
+    textPieces.join('\n\n'),
+    { contentReferences: metadata.content_references },
+  );
+
+  return { ...base, text, attachments, references };
 }
 
 export interface NormalizeOptions {
@@ -247,6 +259,7 @@ export function normalizeChatGptConversation(
       parentMessageId: node.parentId ?? undefined,
       timestamp: extracted.timestamp,
       attachments: extracted.attachments,
+      references: extracted.references,
     });
   }
 

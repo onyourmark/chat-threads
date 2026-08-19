@@ -32,6 +32,30 @@ export interface Attachment {
 }
 
 /**
+ * A place inside a turn's text where the provider pointed at something else —
+ * usually a file the user attached.
+ *
+ * Providers mark these with private internal syntax that their own interface
+ * renders and never shows the user. Adapters replace that syntax with readable
+ * text and record what they found here, so the panel can show a tidy chip and
+ * a reader can still tell that a reference existed.
+ */
+export interface TurnReference {
+  /** What the reference points at, as far as the adapter could tell. */
+  kind: 'file' | 'other';
+  /**
+   * The file or source name, when the provider supplied one. Absent means the
+   * name could not be recovered — never guessed.
+   */
+  name?: string;
+  /**
+   * The provider's raw marker, kept for diagnostics when an adapter needs
+   * repairing. Never rendered.
+   */
+  raw: string;
+}
+
+/**
  * Sentinel topic ids. Real topics use generated ids; these are states a turn
  * can be in that are not "belongs to topic X".
  */
@@ -87,6 +111,12 @@ export interface Turn {
   /** Provider id of the parent message, used for branch reconstruction. */
   parentMessageId?: string;
   attachments: Attachment[];
+  /**
+   * References found inside this turn's text. Informational: the text itself
+   * already carries a readable replacement, so nothing downstream has to
+   * consult this to produce a correct transcript.
+   */
+  references: TurnReference[];
   /** False means: leave this turn out of every generated transcript. */
   included: boolean;
   assignment: TopicAssignment;

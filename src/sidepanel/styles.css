@@ -604,3 +604,30 @@ label {
   white-space: nowrap;
   border: 0;
 }
+
+/*
+ * Reference chips: files a turn's text points at. Compact, because vertical
+ * space in a side panel is the scarce resource.
+ */
+.refs {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 5px 0 0;
+  padding: 0;
+}
+
+.ref-chip {
+  font-size: 10.5px;
+  line-height: 1.5;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -31,10 +31,16 @@ export type BackgroundRequest =
 /** What the background reports about the active tab. */
 export interface ActiveTabInfo {
   tabId?: number;
+  /**
+   * The tab's address, when Chat Threads is allowed to read it. Absent means
+   * the extension has no access to this tab — not that the tab has no URL.
+   */
   url?: string;
   provider?: ProviderId;
   /** True when the URL matches a supported provider host. */
   supported: boolean;
+  /** True when the user invoked Chat Threads on this specific tab. */
+  invoked: boolean;
   /** True when the content script answered a ping. */
   contentScriptReady: boolean;
 }
@@ -183,6 +189,19 @@ export function parseSourceConversation(v: unknown): SourceConversation | null {
           ];
         })
       : [];
+    const references = Array.isArray(t.references)
+      ? t.references.flatMap((r: unknown) => {
+          if (!isRecord(r)) return [];
+          const kind = r.kind === 'file' ? 'file' : 'other';
+          return [
+            {
+              kind: kind as 'file' | 'other',
+              name: optString(r.name),
+              raw: isString(r.raw) ? r.raw : '',
+            },
+          ];
+        })
+      : [];
     return [
       {
         id: t.id,
@@ -196,6 +215,7 @@ export function parseSourceConversation(v: unknown): SourceConversation | null {
         timestamp: optString(t.timestamp),
         parentMessageId: optString(t.parentMessageId),
         attachments,
+        references,
         included: t.included !== false,
         assignment: isString(t.assignment) ? t.assignment : 'unassigned',
         edited: t.edited === true,

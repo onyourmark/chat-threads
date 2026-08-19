@@ -67,6 +67,25 @@ export function TurnCard({
             Attached: {turn.attachments.map((a) => a.name).join(', ')}
           </p>
         )}
+
+        {/*
+          Files the turn's text points at. The text already carries a readable
+          replacement for the provider's private marker; these chips just make
+          the same information easier to scan.
+        */}
+        {turn.references.length > 0 && (
+          <ul className="refs" aria-label="Files referenced in this message">
+            {turn.references.map((r, i) => (
+              <li className="ref-chip" key={`${r.raw}-${i}`}>
+                {r.kind === 'file'
+                  ? r.name
+                    ? `Attached file: ${r.name}`
+                    : 'Refers to an attachment'
+                  : (r.name ?? 'Refers to a source')}
+              </li>
+            ))}
+          </ul>
+        )}
         {collapsible && isLong && (
           <button
             type="button"

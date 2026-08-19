@@ -6,6 +6,7 @@ import type {
   Role,
   SourceConversation,
   Turn,
+  TurnReference,
 } from './types';
 import { UNASSIGNED } from './types';
 
@@ -17,6 +18,7 @@ export interface RawTurnInput {
   parentMessageId?: string;
   timestamp?: string;
   attachments?: Attachment[];
+  references?: TurnReference[];
 }
 
 /**
@@ -43,6 +45,7 @@ export function buildTurns(
     timestamp: r.timestamp,
     parentMessageId: r.parentMessageId,
     attachments: r.attachments ?? [],
+    references: r.references ?? [],
     included: true,
     assignment: UNASSIGNED,
     edited: false,
@@ -58,6 +61,8 @@ export function buildTurns(
 export function freezeConversation(c: SourceConversation): SourceConversation {
   c.turns.forEach((t) => {
     Object.freeze(t.attachments);
+    t.references.forEach((r) => Object.freeze(r));
+    Object.freeze(t.references);
     Object.freeze(t);
   });
   Object.freeze(c.turns);

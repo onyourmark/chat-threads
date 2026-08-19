@@ -28,7 +28,11 @@ export interface WorkingState {
 export function createWorkingState(source: SourceConversation): WorkingState {
   return {
     source,
-    turns: source.turns.map((t) => ({ ...t, attachments: [...t.attachments] })),
+    turns: source.turns.map((t) => ({
+      ...t,
+      attachments: [...t.attachments],
+      references: [...t.references],
+    })),
     topics: [],
   };
 }
