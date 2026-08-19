@@ -24,10 +24,18 @@ export class OpenAiAnalyzer implements TopicAnalyzer {
   readonly label = 'OpenAI';
   readonly endpointOrigin = 'https://api.openai.com';
 
-  constructor(
-    private readonly apiKey: string,
-    private readonly model: string,
-  ) {}
+  /**
+   * A true private field, not TypeScript's `private`, which is only a
+   * compile-time marker: the key must not be enumerable or serializable, so
+   * that logging or stringifying an analyzer can never reveal it.
+   */
+  readonly #apiKey: string;
+  readonly #model: string;
+
+  constructor(apiKey: string, model: string) {
+    this.#apiKey = apiKey;
+    this.#model = model;
+  }
 
   async analyze(
     input: AnalysisInput,
@@ -40,10 +48,10 @@ export class OpenAiAnalyzer implements TopicAnalyzer {
         signal: options.signal,
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${this.apiKey}`,
+          authorization: `Bearer ${this.#apiKey}`,
         },
         body: JSON.stringify({
-          model: this.model,
+          model: this.#model,
           // JSON mode is supported far more widely than per-model schema
           // enforcement, and the reply is validated here regardless.
           response_format: { type: 'json_object' },

@@ -31,10 +31,18 @@ export class AnthropicAnalyzer implements TopicAnalyzer {
   readonly label = 'Anthropic';
   readonly endpointOrigin = 'https://api.anthropic.com';
 
-  constructor(
-    private readonly apiKey: string,
-    private readonly model: string,
-  ) {}
+  /**
+   * A true private field, not TypeScript's `private`, which is only a
+   * compile-time marker: the key must not be enumerable or serializable, so
+   * that logging or stringifying an analyzer can never reveal it.
+   */
+  readonly #apiKey: string;
+  readonly #model: string;
+
+  constructor(apiKey: string, model: string) {
+    this.#apiKey = apiKey;
+    this.#model = model;
+  }
 
   async analyze(
     input: AnalysisInput,
@@ -47,13 +55,13 @@ export class AnthropicAnalyzer implements TopicAnalyzer {
         signal: options.signal,
         headers: {
           'content-type': 'application/json',
-          'x-api-key': this.apiKey,
+          'x-api-key': this.#apiKey,
           'anthropic-version': API_VERSION,
           // Required for requests that originate in a browser context.
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: this.model,
+          model: this.#model,
           max_tokens: 16000,
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: buildUserPrompt(input) }],
