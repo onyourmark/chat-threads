@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Generate icons
+        run: npm run icons
+
+      - name: Build extension
+        run: npm run build
+
+      # A conversation fixture must never contain real conversation data, and
+      # a build must never contain a key. Both are cheap to check and easy to
+      # get wrong in a pull request.
+      - name: Check the build for secrets
+        run: |
+          if grep -rIEn "sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}" dist/ src/ tests/; then
+            echo "::error::A string resembling an API key was found."
+            exit 1
+          fi
+          echo "No API-key-like strings found."
+
+      - name: Upload unpacked extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-threads-unpacked
+          path: dist/
