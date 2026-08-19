@@ -1,0 +1,7 @@
+# Keep everything LF in the repository so the Linux CI runner and Windows
+# checkouts agree. Chrome reads the built files, not these, so this only
+# affects diffs and tooling.
+* text=auto eol=lf
+
+# Generated PNGs must never be line-ending "fixed".
+*.png binary
