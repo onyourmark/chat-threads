@@ -1,116 +1,123 @@
 # Contributing
 
-Thanks for looking. This is a small, deliberately narrow project: it takes an
-existing AI conversation and lets someone reshape a copy of it. Contributions
-that make that work better are very welcome. Contributions that turn it into a
-general-purpose AI client are not — see the scope note at the end.
+Thanks for looking at Chat Threads. Please read the first section before
+opening anything — it will save you time.
 
-## Never commit real conversation data
+## How this project accepts contributions
 
-This matters more here than in most projects, because the natural way to debug
-a retrieval bug is to paste the conversation that broke it. Please don't.
+**Chat Threads is public source, but it is not currently accepting pull
+requests or other external code contributions.**
+
+That is a decision about maintainer time, not about the quality of anyone's
+work. Reviewing, testing and taking responsibility for other people's changes
+to an extension that reads private conversations is a real ongoing commitment,
+and the owner is not in a position to make it. Rather than leave pull requests
+sitting unanswered for months, the project says so up front.
+
+Concretely:
+
+| You want to | Please |
+| --- | --- |
+| Read, audit or learn from the code | Go ahead — that is why it is public |
+| Fork it and change it | Go ahead, under the terms of the [licence](LICENSE) |
+| Report a security problem | Yes please — see [SECURITY.md](SECURITY.md) |
+| Report a reproducible bug | Yes please — see below |
+| Send a pull request | Please don't; it will be closed unread, with no offence meant |
+| Become a maintainer | The project is not adding maintainers |
+
+Pull requests may be closed without review. This is not a judgement on the
+change; it is the policy applying evenly.
+
+### Forks
+
+Forks are welcome and are what the licence is for. Two things to be clear
+about:
+
+- **A fork is not Chat Threads.** It is your software, published under your
+  name, and it is not an official release. Please do not present it as one.
+- **A fork cannot change anyone's installed copy of Chat Threads.** Chrome ties
+  an installed extension to whoever published it. A fork you publish is a
+  separate extension that a user would have to choose to install. There is no
+  route by which forked code reaches an existing installation.
+
+What counts as an official release, and who authorises one, is written down in
+[docs/RELEASE-SECURITY.md](docs/RELEASE-SECURITY.md).
+
+## Never send real conversation data
+
+This matters more here than in most projects, because the natural way to
+describe a retrieval bug is to paste the conversation that broke it. Please
+don't.
 
 - Test fixtures are hand-written and synthetic. `tests/fixtures/` contains no
   real conversation, and must continue not to.
-- When reporting a bug, redact. The adapter tells you which file failed and why
-  without needing the text — paste that instead.
-- If you need a fixture for a new case, write one that demonstrates the
-  *structure*, with invented content.
+- When reporting a bug, redact. The extension tells you which adapter failed
+  and why without needing the text — paste that instead.
+- The same applies to screenshots. A screenshot of the side panel is a
+  screenshot of your conversation.
 
-## Getting set up
+## Reporting a bug
+
+The most useful report is a retrieval failure, because provider changes are the
+likeliest thing to break.
+
+When retrieval fails, the panel shows the adapter that failed, a reason code,
+and the source file to look at. Please include:
+
+1. Which provider, and roughly what the conversation contained — long?
+   branched? attachments? code? — **not** the conversation itself.
+2. The full text of the error box, including the diagnostics list.
+3. Whether the panel said the result was complete, unconfirmed or incomplete.
+4. Your browser and version.
+
+If retrieval *succeeded* but the transcript was wrong — missing turns, the
+wrong branch, jumbled order, raw provider markers showing through — say what
+you expected and what you got, again without pasting the conversation.
+
+## Security reports
+
+Do not open a public issue. Use the process in [SECURITY.md](SECURITY.md).
+
+## Building it yourself
 
 ```bash
 npm install
 npm run icons
-npm run build
-npm run check    # lint, typecheck, test, build
+npm run build       # writes the unpacked extension to dist/
+npm run check       # lint, typecheck, test, build
 ```
 
-Load `dist/` as an unpacked extension at `chrome://extensions` with Developer
-mode on. After each rebuild, press reload on the extension card, then reload the
-ChatGPT or Claude tab.
+Load `dist/` as an unpacked extension with Developer mode on. After each
+rebuild, reload the extension, then reload the ChatGPT or Claude tab.
 
-## Reporting a retrieval failure
+## If you are reading the code
 
-This is the most useful bug report you can file, and the most likely one.
+The layering is the point, so here is the map:
 
-When retrieval fails, the side panel shows the adapter that failed, a reason
-code, and the source file to look at. Please include:
-
-1. Which provider, and roughly what the conversation contained (long? branched?
-   attachments? code?) — **not** the conversation itself.
-2. The full text of the error box, including the diagnostics list.
-3. Whether the panel said the result was complete, unconfirmed or incomplete.
-4. Your Chrome version.
-
-If retrieval *succeeded* but the transcript was wrong — missing turns, the wrong
-branch, jumbled order — say what you expected and what you got, again without
-pasting the conversation.
-
-## Where to make a change
-
-The layering is the point of the codebase, so please keep changes in the right
-place:
-
-| Change | Where |
+| Concern | Where |
 | --- | --- |
 | A provider changed its format | `src/adapters/<provider>/` only |
-| Supporting a new provider | A new folder under `src/adapters/`, plus one line in `registry.ts` |
-| How turns are excluded, edited, assigned | `src/operations/working.ts` |
-| How transcripts are produced | `src/operations/transcript.ts` |
+| Provider-private marker syntax | `src/adapters/chatgpt/references.ts` |
+| Exclusion, editing, topic assignment | `src/operations/working.ts` |
+| Transcript generation | `src/operations/transcript.ts` |
 | The model-proposal contract | `src/ai/schema.ts` |
-| A new model provider | `src/ai/providers/` |
 | Interface | `src/sidepanel/` |
 
-Two rules hold everywhere:
+Two invariants hold everywhere:
 
-1. **Nothing above `src/adapters/` may know which provider a conversation came
-   from**, beyond the `provider` field on a turn. If you find yourself writing
-   `if (provider === 'chatgpt')` in `operations/` or `sidepanel/`, the fix
-   belongs in an adapter.
-2. **Never mutate a `SourceConversation`.** It is frozen; write to the working
-   copy. Every guarantee the product makes about the original conversation
-   depends on this.
+1. **Nothing above `src/adapters/` knows which provider a conversation came
+   from**, beyond the `provider` field on a turn.
+2. **A `SourceConversation` is never mutated.** It is frozen; edits go to the
+   working copy. Every guarantee the product makes about leaving the original
+   conversation alone depends on this.
 
-## Style
-
-- TypeScript, strict mode. No `any` — the lint rule is an error, not a warning.
-- Comments explain *why*, not *what*. Match the density of the surrounding file.
-- Prefer a pure function returning new state over a mutation.
-- User-facing strings are plain English. No jargon, no error codes shown as
-  prose, no blame. "Reload the page to continue", not "Content script handshake
-  failed".
-
-## Tests
-
-`npm run test`. New behaviour needs a test; a bug fix needs a test that fails
-before it.
-
-Tests must never require a live account, a network connection, or an API key.
-The AI path is exercised end to end with `MockAnalyzer`, and provider retrieval
-is exercised through the pure `normalize*` functions against fixtures. If you
-add a case a fixture does not cover — a new content type, a new branching
-shape — add the fixture too.
-
-If you have a live account and can run the manual procedure in
-[docs/MANUAL-TESTING.md](docs/MANUAL-TESTING.md), reporting the results is
-genuinely valuable; those steps are currently unverified.
-
-## Commits and pull requests
-
-- Conventional-ish prefixes: `feat:`, `fix:`, `docs:`, `test:`, `chore:`.
-- One coherent change per commit; please don't mix a refactor with a fix.
-- Run `npm run check` before opening a PR. CI runs the same thing.
-- Say what you tested, and be explicit about what you could not test.
+If either of those looks violated, that is worth reporting as a bug.
 
 ## Scope
 
 In scope: retrieval, the working copy, cleaning, editing, splitting, transcript
-generation, adapters for more chat sites, accessibility, and honesty about
-failure.
+generation, accessibility, and honesty about failure.
 
 Out of scope: accounts, cloud sync, a backend, analytics, billing,
-collaboration, summarizing a conversation *instead of* preserving it, or
+collaboration, summarising a conversation *instead of* preserving it, or
 anything that writes back to the user's ChatGPT or Claude account.
-
-If you are unsure whether an idea fits, open an issue before building it.

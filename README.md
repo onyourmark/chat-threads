@@ -54,7 +54,9 @@ them.
 
 | | |
 | --- | --- |
-| Reads the whole conversation | From ChatGPT's and Claude's own conversation data, not from the visible page — collapsed and not-yet-rendered turns are included |
+| Reads the whole conversation | From ChatGPT's and Claude's own conversation data, not from the visible page — collapsed and not-yet-rendered turns are included. Tested live on a 449-turn ChatGPT conversation |
+| Asks before it reads anything | No standing site access; it can only read a tab you point it at with the toolbar icon |
+| Readable file references | ChatGPT's private "attached file" markers become `[Reference to attached file: notes.md]` rather than raw syntax |
 | Follows the branch you are on | Reconstructs the branch currently displayed, and says so when it cannot confirm which one that is |
 | Never edits the original | Everything happens on a working copy the extension holds in memory |
 | Prompts-only view | User turns in order, with the matching reply one click away |
@@ -68,15 +70,19 @@ them.
 ## Screenshots
 
 Not yet included. The interface is four tabs — Prompts, Clean, Split, Output —
-in a standard Chrome side panel. Screenshots will be added once the extension
-has been exercised against live accounts; see
-[docs/MANUAL-TESTING.md](docs/MANUAL-TESTING.md).
+in a standard Chrome side panel. Screenshots are held back deliberately: the
+obvious screenshot is of a real conversation, and that is exactly the thing not
+to publish. They will be added using a conversation created for the purpose.
 
 ## Privacy
 
 Chat Threads has no server, no analytics and no telemetry. It does not collect,
 store or transmit your conversations.
 
+- **It holds no standing access to any website.** Out of the box it cannot read
+  ChatGPT, Claude or anything else until you click its toolbar icon on a tab,
+  and that access ends when you navigate away. Chrome's extension page should
+  show no site permissions and site access set to *on click*.
 - Reading, viewing, editing, excluding, splitting and generating transcripts
   all happen locally in your browser.
 - The only outbound request the extension can ever make is the optional
@@ -107,12 +113,14 @@ Then, in Chrome:
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and choose the `dist/` folder.
 4. Open a ChatGPT or Claude conversation.
-5. Click the Chat Threads toolbar icon to open the side panel.
+5. Click the Chat Threads toolbar icon. That one click both opens the side
+   panel and gives Chat Threads permission to read that tab.
 
-If you had a ChatGPT or Claude tab open before installing, reload it — content
-scripts are only injected into pages loaded after the extension.
+You will click the icon again after reloading the page, or on a different tab.
+If you would rather not, the panel offers to let you grant ongoing access to
+chatgpt.com and claude.ai, which you can revoke at any time.
 
-Requires Chrome 116 or later (the side panel API).
+Requires Chrome or Edge 116 or later (the side panel API).
 
 ## Development
 
@@ -125,7 +133,9 @@ npm run check      # all of the above, in order
 ```
 
 After a rebuild, press the reload button on the Chat Threads card in
-`chrome://extensions`, then reload the ChatGPT or Claude tab.
+`chrome://extensions`, then click the Chat Threads icon on the provider tab
+again. There is no need to reload the page itself — the reader script is
+injected on demand rather than declared in the manifest.
 
 Tests never touch a live account. Everything runs against hand-written fixtures
 in `tests/fixtures/`. Please do not commit real conversation data — see
@@ -177,22 +187,30 @@ Be aware of these before relying on it:
   Threads uses them from within the page, on your existing session. If either
   provider changes them, retrieval will break until the relevant adapter is
   updated. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
-- **Not yet tested against live accounts.** The adapters are tested thoroughly
-  against fixtures, but at the time of writing they have not been run against a
-  signed-in ChatGPT or Claude session. The procedure to do that is written up
-  in [docs/MANUAL-TESTING.md](docs/MANUAL-TESTING.md).
-- **Live AI topic proposals are unverified.** The provider clients are
-  implemented and the whole path is tested with a mock, but no request has been
-  made against a real API key.
+- **ChatGPT is live-tested; Claude is not.** ChatGPT retrieval and the whole
+  reshaping workflow have been run against a real account on a 449-turn
+  conversation, and the resulting transcript was successfully continued in a
+  new ChatGPT chat. **Claude retrieval has never been run against a live
+  account.** Treat Claude support as implemented but unverified.
+- **One ChatGPT account, of one type.** Team, Enterprise and Edu accounts are
+  untested.
+- **AI topic proposals: one successful OpenAI call.** A real request produced
+  usable topics, but one run was slow and appeared to retry before succeeding.
+  There is no retry logic. The Anthropic client has not been used live.
+- **The permission model changed after that testing.** Chat Threads now uses
+  `activeTab` instead of standing site access. The retrieval mechanism is
+  unchanged, but the way the reader gets into the page has not been exercised
+  in a browser yet. See [docs/MANUAL-TESTING.md](docs/MANUAL-TESTING.md).
 - **Attachments are referenced, not included.** A transcript notes that
-  `spec.pdf` was attached; it does not contain the file.
+  `spec.pdf` was attached, and an inline mention becomes
+  `[Reference to attached file: spec.pdf]`; it does not contain the file.
 - **Artifacts and canvas documents are not retrieved.** Only the conversation
   text is.
 - **Model reasoning is deliberately not retrieved.** Extended thinking and
   chain-of-thought blocks are skipped by design.
 - **Working state is not persisted.** Closing the panel or reloading the
   conversation discards your edits. Generate and copy before you leave.
-- **Chrome only.** No Firefox or Safari build.
+- **Chromium only.** Chrome and Edge. No Firefox or Safari build.
 
 ## Architecture
 
@@ -221,16 +239,29 @@ More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Contributing
 
-Bug reports and adapter fixes are especially welcome — provider changes are the
-most likely thing to break. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to
-report a retrieval failure usefully, and please read the note about never
-committing real conversation data.
+**Chat Threads is public source, but is not currently accepting pull requests
+or other external code contributions.** That is about maintainer time, not
+about anyone's work — reviewing changes to an extension that reads private
+conversations is a commitment the owner cannot make right now, and it seems
+better to say so than to leave pull requests unanswered.
+
+Bug reports and security reports are very welcome, and reports of a retrieval
+failure are the most useful of all. [CONTRIBUTING.md](CONTRIBUTING.md) explains
+how to write one — and please read the note about never sending real
+conversation data, which applies to screenshots too.
+
+Forks are welcome under the licence. A fork is your software, not an official
+Chat Threads release, and it cannot alter anyone's installed copy. What counts
+as an official release is set out in
+[docs/RELEASE-SECURITY.md](docs/RELEASE-SECURITY.md).
 
 ## Roadmap
 
 Ideas, not commitments:
 
-- Live testing against real ChatGPT and Claude accounts, and screenshots.
+- Live testing against a real Claude account, and against the current
+  `activeTab` permission model.
+- Screenshots, taken from a conversation created for the purpose.
 - Remembering the working state across a panel close.
 - Reordering turns within a generated conversation.
 - Search within a loaded conversation.

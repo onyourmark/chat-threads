@@ -60,6 +60,8 @@ Each adapter is three files plus an entry point:
 - `normalize.ts` — a **pure** function from the provider's payload to the
   common representation. This is what the tests drive; it needs no browser and
   no network.
+- `references.ts` (ChatGPT) — translates the provider's private inline markers
+  into readable text. See below.
 - `dom.ts` — a last-resort read of the rendered page.
 - `index.ts` — ties them together and converts every failure into an
   `AdapterFailure` that names the file to repair.
@@ -68,12 +70,24 @@ Adding a provider means adding a folder and one line in `registry.ts`.
 
 ### How retrieval actually works
 
-The content script runs on the provider's own origin. Chrome's documented
+The reader script runs on the provider's own origin. Chrome's documented
 behaviour is that a content script's `fetch` goes out on the host page's
 origin, so a request to the provider's own conversation endpoint is same-origin
 and carries the session the user is already signed in with.
 
-That choice has two consequences worth stating:
+It gets there on demand. Chat Threads declares no content scripts and holds no
+host permissions, so nothing runs on any site until the user clicks the toolbar
+icon; that click grants `activeTab` for the tab, and the panel injects the
+reader with `scripting.executeScript`. The click has to be handled by our own
+`action.onClicked` rather than by `openPanelOnActionClick`, because when Chrome
+opens the panel itself the event never fires and the `activeTab` grant never
+arrives.
+
+That choice has three consequences worth stating:
+
+- **There is a specific moment at which access begins**, and it is a user
+  action. "When could this extension have read my chats?" has a precise answer
+  rather than "any time it liked".
 
 - **No credential is ever read, stored or moved.** The browser attaches the
   session itself. For ChatGPT, an access token is fetched from the page's own
@@ -96,6 +110,24 @@ dangling parent or a cycle produce `reliable: false` and a warning, and the
 adapter downgrades completeness from `complete` to `unverified`. A guessed
 branch is a real conversation, but not necessarily the one the user is looking
 at, so it is never reported as complete.
+
+### Provider-private markers
+
+ChatGPT does not write a file name into a message that refers to an attachment.
+It writes a marker built from Unicode Private Use Area characters, and its own
+interface swaps that for a chip before the user sees anything. Reading the
+conversation data directly means getting the raw marker — which is exactly the
+bug live testing found.
+
+`references.ts` translates them, at normalization, once. Because the fix lands
+in the text every other layer reads, every surface is correct at the same time:
+the prompts view, the clean view, the split view, the preview, the clipboard
+and every download format. There is no per-view escaping to keep in step.
+
+The name comes from ChatGPT's own `content_references` metadata where that is
+present, and from the documented marker grammar where it is not. Where no name
+can be recovered, the replacement says a reference existed rather than
+inventing a file name or silently deleting the fact.
 
 ### What is deliberately not retrieved
 

@@ -11,6 +11,10 @@ Chat Threads has no server. It does not collect, store, sell or transmit your
 conversations. The only outbound request it can make is one you trigger
 yourself, to a model provider you configure, with an API key you supply.
 
+It also holds **no standing access to any website**. Out of the box it cannot
+read ChatGPT, Claude, or anything else until you click its toolbar icon on a
+tab — and that grant covers only that tab, until you navigate away.
+
 ## What data the extension reads
 
 When you open the side panel on a ChatGPT or Claude conversation and it loads,
@@ -32,17 +36,25 @@ It does **not** read:
 - your other tabs, your browsing history, your bookmarks, or any site other
   than the two providers.
 
-Nothing is read until the panel loads a conversation. Opening the panel on an
-unsupported page reads nothing but the tab's URL.
+Nothing is read until you invoke Chat Threads on a tab and the panel loads that
+conversation. Before you click the icon, the extension cannot read the page or
+even its address.
+
+One further thing is *rewritten* rather than read: ChatGPT marks references to
+attached files with private syntax that its own interface hides. Chat Threads
+replaces those markers with readable text such as
+`[Reference to attached file: notes.md]`, using the file name ChatGPT itself
+supplies. It never fetches the file, and never invents a name it was not given.
 
 ## Where processing happens
 
 In your browser, on your computer. There is no Chat Threads server and no
 Chat Threads account.
 
-- Retrieval runs in a content script on the provider's own page
-  (`src/content/index.ts`), so the request goes to ChatGPT or Claude exactly as
-  the page's own requests do, on the session you are already signed in with.
+- Retrieval runs in a reader script injected into the provider's own page when
+  you invoke Chat Threads (`src/content/index.ts`), so the request goes to
+  ChatGPT or Claude exactly as the page's own requests do, on the session you
+  are already signed in with.
 - Normalizing, viewing, excluding, editing, topic assignment and transcript
   generation are all pure functions in `src/model/` and `src/operations/`. None
   of them performs any network access.
@@ -104,20 +116,46 @@ current code. If it ever changes, this document changes in the same commit.
 
 ## Permissions, and why each is needed
 
+Chat Threads requests **no host permissions at install time**. Chrome's
+extension details page should show no "read and change your data on" entry for
+any site, and site access set to *on click*.
+
 | Permission | Why |
 | --- | --- |
 | `sidePanel` | To show the interface in Chrome's side panel |
 | `storage` | To hold your AI provider choice, and your API key if you opt in |
-| Host access to `chatgpt.com`, `chat.openai.com`, `claude.ai` | To run the content script that reads the conversation you are viewing |
-| *Optional* host access to `api.anthropic.com`, `api.openai.com` | Only requested when you first use Find Topics; declined or unused otherwise |
+| `activeTab` | Temporary access to the one tab you click the icon on, so the conversation can be read. Granted per invocation, and revoked when you navigate away |
+| `scripting` | To place the reader script into that tab at the moment you invoke it. Grants nothing on its own |
+
+Four further permissions are **optional** — declared so they can be asked for,
+never held unless you say yes:
+
+| Optional permission | Asked for when |
+| --- | --- |
+| Ongoing access to `chatgpt.com`, `chat.openai.com`, `claude.ai` | Only if you choose "Allow Chat Threads to read…" so the panel stops needing the icon each time. Revocable from Chrome's extension settings |
+| Access to `api.anthropic.com`, `api.openai.com` | Only when you first use Find Topics |
 
 Chat Threads does not request `<all_urls>`, `tabs`, `history`, `cookies`,
-`downloads`, `webRequest`, or access to any site beyond the four above.
+`downloads`, `webRequest`, `bookmarks`, or access to any site beyond those
+above.
 
-It reads the active tab's URL through the host permissions it already has, so
-no separate `tabs` permission is needed. Downloads are offered through an
-ordinary link rather than the downloads API, so no `downloads` permission is
-needed either.
+Two notes on what is *not* needed:
+
+- The active tab's address is read through `activeTab`, so no `tabs`
+  permission is required. Before you invoke it, Chat Threads genuinely cannot
+  see what page you are on — which is why the panel asks you to click the icon
+  rather than announcing what site you are visiting.
+- Downloads are offered through an ordinary link, so no `downloads`
+  permission is required.
+
+### Why this matters more than it sounds
+
+An extension with permanent access to a site can read that site whenever it
+likes, including in background tabs you are not looking at. Chat Threads gave
+that up: with `activeTab`, there is a specific moment — your click — at which
+access begins, and it ends when you leave the page. The cost is that you click
+the icon; the benefit is that "when could this thing have read my chats?" has a
+precise answer.
 
 ## Your original conversation
 

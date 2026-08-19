@@ -60,40 +60,92 @@ no contract being broken — it was never a public interface.
 If you hit a break, the report that helps most is described in
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-## Not yet verified against live accounts
+## What has and has not been tested live
 
-At the time of writing, the adapters have been tested extensively against
-hand-written fixtures but **have not been run against a signed-in ChatGPT or
-Claude session**. The endpoint shapes above are implemented from their
-documented-by-observation behaviour, not from a live capture during
-development.
+### ChatGPT: tested, and it worked
 
-Concretely, these remain unverified:
+ChatGPT retrieval has been run against a real signed-in account in Microsoft
+Edge. A conversation of roughly 449 turns loaded, reported itself complete, and
+included messages that ChatGPT's own interface collapses. The full workflow —
+prompts view, exclusion, editing, restore, reset, manual splitting, preview,
+copy — worked, the original conversation was untouched, and a topic-specific
+transcript pasted into a new ChatGPT conversation was correctly treated as
+prior context.
 
-- that the ChatGPT session and conversation endpoints respond as expected on a
-  current account;
-- that the Claude organization lookup picks the right organization for accounts
-  that have more than one;
-- that a very long real conversation loads completely;
-- that the branch reconstruction matches what a real page displays after an
-  edit or a regeneration.
+That is one account, of one type, on one browser. It does **not** establish
+compatibility across ChatGPT account types (Team, Enterprise, Edu are all
+untested), nor that every conversation shape behaves the same.
 
-The procedure to check all of this is written up in
-[MANUAL-TESTING.md](MANUAL-TESTING.md). Until someone runs it, treat live
-retrieval as "implemented and unit-tested, not yet field-tested".
+### Claude: still not tested live
 
-## Live AI topic proposals are unverified
+Claude retrieval has **never been run against a signed-in account**. It is
+implemented and unit-tested against fixtures, and the endpoint shapes come from
+documented-by-observation behaviour rather than a live capture. Treat Claude
+support as unverified. In particular these are unknown:
 
-The OpenAI and Anthropic clients are implemented, and the full path — building
-the payload, sending it, parsing, validating, applying, correcting — is tested
-with a mock analyzer. No request has been made with a real API key, so the
-exact request and response shapes are unconfirmed in practice.
+- whether the organization lookup picks the right organization on an account
+  that belongs to more than one;
+- whether a long real conversation loads completely;
+- whether branch reconstruction matches what the page shows after an edit or a
+  retry.
+
+### OpenAI topic proposals: one successful live call
+
+A real OpenAI API request has completed successfully with a user-supplied key,
+producing sensible topic names and turn assignments that Output turned into
+separate conversations.
+
+One successful run is not reliability. One observed run was slow and appeared
+to hit a temporary retry or reload condition before it succeeded, so latency
+and transient failure handling are open questions. There is no retry logic and
+no request timeout beyond the browser's own.
+
+### Anthropic topic proposals: not tested live
+
+The Anthropic client is implemented and unit-tested; no request has been made
+with a real Anthropic key.
+
+### The current permission model: not tested live
+
+After the live run, the extension was changed to hold **no standing site
+access**: it now uses `activeTab` and injects its reader script on demand. The
+live testing above was done with the previous build, which had permanent host
+access to the provider sites.
+
+The retrieval mechanism itself is unchanged — the same script, doing the same
+same-origin fetch, in the same isolated world — but *how it gets into the page*
+is new and has not been exercised in a browser. Neither Chrome 151 nor Edge 151
+still honours `--load-extension`, so this could not be automated. It is the
+first thing to re-test; see [MANUAL-TESTING.md](MANUAL-TESTING.md).
+
+## Provider-private markers may still surprise us
+
+ChatGPT writes references to attached files as private markers built from
+Unicode Private Use Area characters, which its own interface swaps for a chip
+before the user sees anything. Chat Threads reads the conversation data
+directly, so it gets the raw markers and translates them itself.
+
+The translation is driven by ChatGPT's own `content_references` metadata where
+that is present, and falls back to the documented marker grammar where it is
+not. Two consequences:
+
+- If ChatGPT introduces a marker kind that does not match the grammar, it could
+  appear raw. The visible symptom would be stray characters or the word
+  `filecite` in a transcript. Report it.
+- Where a file name genuinely cannot be recovered, the transcript says a
+  reference existed without naming a file. It will never invent one.
 
 ## Other limitations
 
+**You have to point it at a tab.** Because Chat Threads holds no standing site
+access, it can only read a tab you have invoked it on with the toolbar icon.
+After a page reload, or on a different tab, you click the icon again. Granting
+the optional site permission removes this, and is offered in the panel.
+
 **Attachments are referenced, not included.** A transcript records that
-`spec.pdf` was attached. It does not contain the file, and the model you paste
-into will not be able to read it.
+`spec.pdf` was attached, and an inline reference becomes
+`[Reference to attached file: spec.pdf]`. It does not contain the file, and the
+model you paste into will not be able to read it.
 
 **Artifacts, canvas documents and rendered tool output are not retrieved.**
 Only conversation text is. A Claude artifact's contents will not appear in your

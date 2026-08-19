@@ -82,7 +82,20 @@ access token the adapter fetches to authorize its request stays inside one
 function scope in `src/adapters/chatgpt/api.ts` and is never returned, logged,
 or stored.
 
+Inside the analyzers the key is held in a genuine private field (`#apiKey`),
+not TypeScript's `private`, which is only a compile-time marker. That makes it
+non-enumerable and absent from `JSON.stringify`, so serialising or logging an
+analyzer cannot reveal it. `tests/api-key-security.test.ts` drives the real
+provider clients against a stubbed `fetch` and asserts that the key reaches
+exactly one host, in exactly one header, never the URL or body, and appears in
+no error message on any failure path.
+
+There are no `console` calls anywhere in `src/`, so there is no logging channel
+for a secret to escape through.
+
 No secret is committed to the repository, and there are no `.env` files.
+`*.pem`, `*.crx` and `*.p12` are gitignored so release signing material cannot
+be committed by accident — see [docs/RELEASE-SECURITY.md](docs/RELEASE-SECURITY.md).
 
 ### Remote code
 
@@ -93,10 +106,18 @@ API hosts. There is no `eval`, no `new Function`, and no remote script tag;
 
 ### Permissions
 
-The extension requests `sidePanel`, `storage`, and host access to the two
-provider origins. Model API hosts are *optional* host permissions, requested at
-the moment of first use and never held otherwise. There is no `<all_urls>`, no
-`tabs`, no `cookies`, no `webRequest`, and no `downloads`.
+The extension requests `sidePanel`, `storage`, `activeTab` and `scripting`, and
+**no host permissions at all**. It therefore has no standing ability to read
+any website; access to a provider tab begins when the user clicks the toolbar
+icon and ends when they navigate away.
+
+Ongoing access to the provider sites, and access to the model API hosts, are
+*optional* permissions — declared so they can be requested, never held unless
+the user grants them. There is no `<all_urls>`, no `tabs`, no `cookies`, no
+`webRequest`, no `history` and no `downloads`.
+
+`scripting` grants nothing by itself: it only allows injection into tabs the
+extension already has access to, which is the invoked tab.
 
 ### The original conversation
 
@@ -114,6 +135,15 @@ actually said.
   extension reads rendered turns from the page. A hostile page could put
   arbitrary text into a turn. That text is still only ever handled as text, and
   the result is always flagged as incomplete.
+- **File-reference names come from provider metadata.** ChatGPT supplies the
+  file name that replaces a private marker. It is treated as untrusted input:
+  control characters and marker delimiters are stripped, the length is capped,
+  and it is rendered as text, never as markup. It is not otherwise verified —
+  a name is what the provider said it was.
+- **The `activeTab` retrieval path has not been exercised in a browser.**
+  Neither Chrome 151 nor Edge 151 still honours `--load-extension`, so it could
+  not be tested automatically. The permission reduction is verifiable by reading
+  `manifest.json`; that the injection works end to end is not yet confirmed.
 - **A user who opts into "remember this key" accepts on-disk storage** of their
   API key in `chrome.storage.local`, readable by anyone with access to the
   Chrome profile. The default is not to do this, and the interface says so.

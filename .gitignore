@@ -7,3 +7,9 @@ dist/
 *.local
 coverage/
 .vite/
+
+# Signing material for official releases. Must never be committed.
+# See docs/RELEASE-SECURITY.md.
+*.pem
+*.crx
+*.p12

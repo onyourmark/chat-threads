@@ -4,41 +4,135 @@ The automated tests cover normalization, editing, splitting, transcript
 generation, AI proposal handling and security against fixtures. They
 deliberately never touch a live account.
 
-**This procedure has not been run.** At the time of writing, no signed-in
-ChatGPT or Claude session was available to the author, so everything below is
-unverified. If you have accounts and half an hour, working through this and
-reporting the results is the single most valuable contribution you can make.
-
 Record results as: step, expected, actual, pass/fail. Please redact
 conversation content in anything you post publicly.
+
+---
+
+## Current status
+
+| Area | Status |
+| --- | --- |
+| ChatGPT retrieval and the full reshaping workflow | **Passed** — tested live, see below |
+| OpenAI Find Topics | **Passed once** — a real API call produced usable topics |
+| Claude retrieval | **Not yet tested** against a live account |
+| The `activeTab` permission model | **Not yet tested** — changed after the live run |
+| Raw file-reference markers | **Fixed, not yet re-tested live** |
+
+### What was tested live, and passed
+
+Tested in Microsoft Edge (Chromium) as an unpacked extension, against a real
+signed-in ChatGPT account, on real conversations.
+
+- ChatGPT was detected and a long conversation of roughly **449 turns** loaded.
+- Retrieval reported itself **complete**.
+- Messages that ChatGPT collapses in its own interface were present in full;
+  **Show full text** recovered the whole prompt.
+- **My Prompts** listed the user's own turns, expanded them fully, and
+  **Show reply** produced the matching assistant response.
+- **Excluding** turns greyed them out, reduced the kept count, and removed them
+  from Preview and from the copied transcript.
+- **Editing** a turn put the edited text in the output; **Restore** and
+  **Reset changes** both returned the working copy to the original.
+- **Manual splitting** produced separate topic conversations, and unassigned
+  turns were correctly reported as belonging to none of them.
+- **Copy** produced a transcript with `User:` / `Assistant:` labels that pasted
+  correctly elsewhere.
+- **The original ChatGPT conversation was unchanged throughout.**
+- **The whole point of the product worked**: a topic-specific transcript was
+  pasted as the first message of a brand-new ChatGPT conversation, and that new
+  conversation treated it as prior context — it identified the subject, kept the
+  continuation details, and answered a question about what the earlier
+  conversation had covered.
+
+### What was tested live with reservations
+
+**OpenAI Find Topics.** With a real OpenAI API key, Find Topics completed and
+proposed several sensible topics with turn assignments, and Output produced a
+conversation per topic. One run was slow and appeared to hit a temporary retry
+or reload condition before succeeding. That is a single successful run, not
+evidence of reliability; treat latency and transient failures as open questions.
+
+### What this does not establish
+
+- Nothing about **Claude**. Claude retrieval has never run against a live
+  account.
+- Nothing about **other ChatGPT account types** — the run was one account, of
+  one type. Team, Enterprise and Edu accounts are untested.
+- Nothing about the **current permission model**. The live run used a build with
+  standing host access to the provider sites. That was replaced afterwards with
+  `activeTab` and on-demand injection, so steps 0 and 4 below need re-running.
+- Nothing about the **file-reference fix**, which was written in response to the
+  live run and is covered only by automated tests so far.
 
 ## Setup
 
 1. `npm install && npm run icons && npm run build`
 2. Open `chrome://extensions`, enable **Developer mode**.
 3. **Load unpacked** → select `dist/`.
-4. Note the Chrome version from `chrome://version`. Must be 116+.
-5. Open a ChatGPT tab and a Claude tab, signed in. **Reload both** — content
-   scripts only reach pages loaded after the extension was installed.
+4. Note the browser version. Chrome or Edge 116+.
+5. Open a ChatGPT tab and a Claude tab, signed in.
 
-## 1. Side panel opens
+There is no longer any need to reload those tabs after installing. Chat Threads
+declares no content scripts and injects its reader on demand instead.
 
-1. On any page, click the Chat Threads toolbar icon.
+## 0. Permissions are as small as claimed
+
+Do this first; it is the step most likely to catch a regression that matters.
+
+1. On `chrome://extensions`, open **Details** for Chat Threads.
+2. **Expect** under *Permissions*: **no** "Read and change your data on" entry
+   for any site. Chat Threads should request no site access at install time.
+3. **Expect** *Site access* to show that it runs only **on click**.
+4. **Expect** no entry for browsing history, tabs, or any site other than the
+   ones you may later grant.
+5. Open a ChatGPT conversation. **Without clicking the Chat Threads icon**,
+   open the side panel from Chrome's own side-panel menu.
+6. **Expect:** "Click the Chat Threads icon to begin". It must **not** load the
+   conversation, and must not claim to know what page you are on.
+
+## 1. Side panel opens on invocation
+
+1. With a ChatGPT conversation open, click the Chat Threads toolbar icon.
 2. **Expect:** the side panel opens, headed "Chat Threads / Reshape your AI
-   conversations."
+   conversations", and the conversation loads.
+3. This single click both opens the panel and grants access to that tab. If the
+   panel opens but then says it needs to be invoked, that is a **failure** —
+   report it, because it means the `activeTab` grant is not arriving.
 
 ## 2. Unsupported site is handled
 
-1. Open the panel on a page that is not ChatGPT or Claude (e.g. example.com).
+1. Open a page that is not ChatGPT or Claude (e.g. example.com) and click the
+   Chat Threads icon.
 2. **Expect:** "Open a ChatGPT or Claude conversation". No error, no spinner.
 3. **Expect:** nothing in the browser console from the extension.
 
 ## 3. Provider detection and "no conversation"
 
-1. Go to `https://chatgpt.com/` with no conversation open.
+1. Go to `https://chatgpt.com/` with no conversation open, click the icon.
 2. **Expect:** "No active conversation found", naming ChatGPT, with a
    "Check again" button.
 3. Repeat at `https://claude.ai/`.
+
+## 3b. Access lapses safely
+
+1. Load a conversation, then reload the ChatGPT page.
+2. Press **Reload** in the panel.
+3. **Expect:** either it reloads cleanly, or it says "Click the Chat Threads
+   icon again" and explains that permission lapsed. Both are acceptable; a
+   silent failure or a raw error is not.
+4. Click the icon again. **Expect:** it loads.
+
+## 3c. Optional standing access
+
+1. From the "Click the Chat Threads icon to begin" screen, use
+   **Allow Chat Threads to read chatgpt.com and claude.ai**.
+2. **Expect:** Chrome's own permission prompt, naming those sites and no others.
+3. Accept it. **Expect:** the conversation loads without clicking the icon, and
+   switching between provider tabs now loads automatically.
+4. Revoke it from `chrome://extensions` → Details → Site access.
+5. **Expect:** the panel returns to asking for the icon, and still works that
+   way.
 
 ## 4. ChatGPT — a complete conversation loads
 
@@ -92,6 +186,26 @@ the version on screen.
 4. Expand a long prompt. **Expect:** the full text, nothing truncated.
 5. Press "Show reply" on a prompt. **Expect:** the assistant's answer to *that*
    prompt appears.
+
+## 8b. File references read as English
+
+This is the defect found during the first live run, so it is worth doing
+deliberately. You need a conversation where you attached or pasted a file and
+the assistant referred back to it.
+
+1. Find an assistant reply that cites an attached file.
+2. **Expect** in the panel: readable text such as
+   `[Reference to attached file: Pasted markdown.md]`, and a small chip under
+   the message naming the file.
+3. **Expect:** no stray marker syntax anywhere — no `filecite`, no `turn0file0`,
+   no invisible or replacement characters mid-sentence.
+4. Check the same message in **My Prompts → Show reply**, in **Split**, and in
+   **Output → Preview**. All four must agree.
+5. Copy the transcript and paste it into a plain-text editor. **Expect** the
+   same readable text, and nothing unprintable.
+6. If a reference appears whose file name could not be recovered, **expect**
+   `[Reference to an attachment from the original conversation]` — a neutral
+   note, never an invented file name and never silent deletion.
 
 ## 9. Excluding turns
 
@@ -198,8 +312,24 @@ the provider you pick.
 3. Switch the OS between light and dark. **Expect:** the panel follows, and
    text stays legible in both.
 
+## Priority order
+
+If there is only time for some of this, do it in this order — highest
+uncertainty first:
+
+1. **Step 0 and step 1** — the permission model changed after the last live
+   run and has never been exercised in a browser.
+2. **Steps 4–7 on Claude** — Claude retrieval has never run against a live
+   account at all.
+3. **Step 8b** — the file-reference fix has only been tested against fixtures.
+4. **Step 4 on ChatGPT again** — confirming the permission change did not
+   disturb the retrieval path that previously worked.
+5. Everything else, which passed on ChatGPT before and is unlikely to have
+   regressed.
+
 ## Reporting
 
-Post results as an issue. Include Chrome version, provider, rough conversation
-size, and the exact text of any warning or error. **Do not paste conversation
-content.**
+Post results as an issue. Include browser and version, provider, rough
+conversation size, and the exact text of any warning or error. **Do not paste
+conversation content**, and remember that a screenshot of the panel is a
+screenshot of your conversation.
