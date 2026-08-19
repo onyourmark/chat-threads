@@ -18,26 +18,58 @@ import { normalizeChatGptConversation } from '../src/adapters/chatgpt/normalize'
 
 interface FakeOptions {
   /** What the background reports about the active tab. */
-  tab?: { tabId?: number; url?: string; provider?: string; supported: boolean };
+  tab?: {
+    tabId?: number;
+    url?: string;
+    provider?: string;
+    supported: boolean;
+    invoked?: boolean;
+  };
   /** Whether the content script answers a ping. */
   ready?: boolean;
+  /** Whether injecting the reader script succeeds. */
+  canInject?: boolean;
+  /** Whether ongoing site access has already been granted. */
+  hasSiteAccess?: boolean;
   /** What `ct:load` returns. */
   loadResult?: unknown;
 }
 
+/** Records what the panel asked the browser to do. */
+interface FakeCalls {
+  injections: number;
+  permissionRequests: number;
+}
+
+let calls: FakeCalls;
+
 function installFakeChrome(options: FakeOptions) {
   const {
-    tab = { tabId: 1, url: 'https://chatgpt.com/c/conv-mixed', provider: 'chatgpt', supported: true },
+    tab = {
+      tabId: 1,
+      url: 'https://chatgpt.com/c/conv-mixed',
+      provider: 'chatgpt',
+      supported: true,
+      invoked: true,
+    },
     ready = true,
+    canInject = true,
+    hasSiteAccess = false,
     loadResult,
   } = options;
+
+  calls = { injections: 0, permissionRequests: 0 };
+  let injected = ready;
 
   const fake = {
     runtime: {
       id: 'test-extension',
       lastError: undefined,
       sendMessage: (_message: unknown, cb: (reply: unknown) => void) => {
-        cb({ type: 'ok:active-tab', info: { ...tab, contentScriptReady: false } });
+        cb({
+          type: 'ok:active-tab',
+          info: { invoked: false, ...tab, contentScriptReady: false },
+        });
       },
     },
     tabs: {
@@ -47,7 +79,7 @@ function installFakeChrome(options: FakeOptions) {
         cb: (reply: unknown) => void,
       ) => {
         if (message.type === 'ct:ping') {
-          cb(ready ? { type: 'ok:pong' } : undefined);
+          cb(injected ? { type: 'ok:pong' } : undefined);
           return;
         }
         if (message.type === 'ct:load') {
@@ -59,11 +91,26 @@ function installFakeChrome(options: FakeOptions) {
       onActivated: { addListener: vi.fn(), removeListener: vi.fn() },
       onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
     },
+    scripting: {
+      executeScript: async () => {
+        calls.injections += 1;
+        if (!canInject) throw new Error('no access to this tab');
+        injected = true;
+        return [];
+      },
+    },
     storage: {
       local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
       session: { get: async () => ({}), set: async () => {}, remove: async () => {} },
     },
-    permissions: { contains: async () => false, request: async () => false },
+    permissions: {
+      contains: async () => hasSiteAccess,
+      request: async () => {
+        calls.permissionRequests += 1;
+        return false;
+      },
+      remove: async () => true,
+    },
   };
 
   (globalThis as unknown as { chrome: unknown }).chrome = fake;
@@ -78,6 +125,10 @@ function goodConversation() {
     }),
   };
 }
+
+// Tells React that `act()` is available, so it does not warn on every render.
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).
+  IS_REACT_ACT_ENVIRONMENT = true;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -119,7 +170,10 @@ describe('the side panel mounts', () => {
 
 describe('states the user can end up in', () => {
   it('explains what to do on an unsupported site', async () => {
-    installFakeChrome({ tab: { supported: false }, loadResult: undefined });
+    installFakeChrome({
+      tab: { tabId: 1, url: 'https://example.com/', supported: false, invoked: true },
+      loadResult: undefined,
+    });
     await mount();
 
     expect(text()).toContain('Open a ChatGPT or Claude conversation');
@@ -127,11 +181,80 @@ describe('states the user can end up in', () => {
     expect(container.querySelector('[role="tablist"]')).toBeNull();
   });
 
-  it('asks for a reload when the content script is not there', async () => {
-    installFakeChrome({ ready: false, loadResult: undefined });
+  it('asks to be invoked when it has no access to the tab', async () => {
+    // No url and no invocation: the normal resting state, because Chat Threads
+    // holds no standing access to any site.
+    installFakeChrome({
+      tab: { tabId: 1, supported: false, invoked: false },
+      loadResult: undefined,
+    });
     await mount();
 
-    expect(text()).toContain('Reload the page to continue');
+    expect(text()).toContain('Click the Chat Threads icon to begin');
+    // It must not guess whether this is a provider page.
+    expect(text()).not.toContain('No active conversation found');
+  });
+
+  it('does not inject anything before it has been invoked', async () => {
+    installFakeChrome({
+      tab: { tabId: 1, supported: false, invoked: false },
+      loadResult: undefined,
+    });
+    await mount();
+
+    expect(calls.injections).toBe(0);
+  });
+
+  it('offers ongoing site access as an explicit opt-in', async () => {
+    installFakeChrome({
+      tab: { tabId: 1, supported: false, invoked: false },
+      hasSiteAccess: false,
+      loadResult: undefined,
+    });
+    await mount();
+
+    const opt = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Allow Chat Threads to read'),
+    );
+    expect(opt).toBeDefined();
+    expect(calls.permissionRequests).toBe(0);
+
+    await act(async () => (opt as HTMLButtonElement).click());
+    expect(calls.permissionRequests).toBe(1);
+  });
+
+  it('does not offer site access again once it has been granted', async () => {
+    installFakeChrome({
+      tab: { tabId: 1, supported: false, invoked: false },
+      hasSiteAccess: true,
+      loadResult: undefined,
+    });
+    await mount();
+
+    expect(text()).not.toContain('Allow Chat Threads to read');
+  });
+
+  it('injects the reader script when it has access but the script is absent', async () => {
+    installFakeChrome({ ready: false, canInject: true, loadResult: goodConversation() });
+    await mount();
+
+    expect(calls.injections).toBe(1);
+    expect(text()).toContain('8 turns loaded');
+  });
+
+  it('says the grant lapsed when the tab refuses the script', async () => {
+    installFakeChrome({ ready: false, canInject: false, loadResult: undefined });
+    await mount();
+
+    expect(text()).toContain('Click the Chat Threads icon again');
+    expect(text()).toContain('lapsed');
+  });
+
+  it('does not re-inject when the script is already there', async () => {
+    installFakeChrome({ ready: true, loadResult: goodConversation() });
+    await mount();
+
+    expect(calls.injections).toBe(0);
   });
 
   it('says when the provider is recognized but no conversation is open', async () => {

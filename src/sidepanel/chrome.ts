@@ -32,11 +32,82 @@ export async function getActiveTab(): Promise<ActiveTabInfo> {
             ? i.provider
             : undefined,
         supported: i.supported === true,
+        invoked: i.invoked === true,
         contentScriptReady: false,
       };
     }
   }
-  return { supported: false, contentScriptReady: false };
+  return { supported: false, invoked: false, contentScriptReady: false };
+}
+
+/**
+ * Make sure the reader script is present in the tab, injecting it if not.
+ *
+ * Chat Threads declares no content scripts and holds no standing site access,
+ * so nothing runs on ChatGPT or Claude until this is called — which only
+ * happens after the user has invoked the extension on that tab, or granted
+ * ongoing access to the site.
+ *
+ * Returns false when the browser refused, which means the grant has lapsed
+ * (usually a page reload) rather than anything being broken.
+ */
+export async function ensureContentScript(tabId: number): Promise<boolean> {
+  if (await pingContentScript(tabId)) return true;
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js'],
+    });
+  } catch {
+    return false;
+  }
+
+  // Injection resolves before the listener is necessarily registered.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    if (await pingContentScript(tabId)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
+/** Site access the user can grant so the panel stops needing the icon. */
+export function providerOrigins(): string[] {
+  return [
+    'https://chatgpt.com/*',
+    'https://chat.openai.com/*',
+    'https://claude.ai/*',
+  ];
+}
+
+/** True when the user has already granted ongoing access to the sites. */
+export async function hasProviderAccess(): Promise<boolean> {
+  try {
+    return await chrome.permissions.contains({ origins: providerOrigins() });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ask for ongoing access to the provider sites. Must be called from a click:
+ * Chrome only grants optional permissions during a user gesture.
+ */
+export async function requestProviderAccess(): Promise<boolean> {
+  try {
+    return await chrome.permissions.request({ origins: providerOrigins() });
+  } catch {
+    return false;
+  }
+}
+
+/** Give ongoing site access back. */
+export async function dropProviderAccess(): Promise<boolean> {
+  try {
+    return await chrome.permissions.remove({ origins: providerOrigins() });
+  } catch {
+    return false;
+  }
 }
 
 /** Ask the content script which conversation is open, if any. */

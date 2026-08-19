@@ -16,7 +16,13 @@ import {
   stats,
   type WorkingState,
 } from '../operations/working';
-import { getActiveTab, loadConversation, pingContentScript } from './chrome';
+import {
+  ensureContentScript,
+  getActiveTab,
+  hasProviderAccess,
+  loadConversation,
+  requestProviderAccess,
+} from './chrome';
 import { CleanView } from './components/CleanView';
 import { OutputView } from './components/OutputView';
 import { PromptsView } from './components/PromptsView';
@@ -27,9 +33,14 @@ type View = 'prompts' | 'clean' | 'split' | 'output';
 type Phase =
   | { kind: 'checking' }
   | { kind: 'unsupported' }
+  /**
+   * Chat Threads has not been given access to this tab. It holds no standing
+   * site access, so this is the normal resting state, not an error.
+   */
+  | { kind: 'needs-invocation' }
   /** On a supported site, but no saved conversation is open. */
   | { kind: 'no-conversation'; provider: string }
-  /** Content script has not loaded — usually the page needs a reload. */
+  /** The tab would not accept the reader script; usually the grant lapsed. */
   | { kind: 'not-ready' }
   | { kind: 'loading' }
   | { kind: 'failed'; failure: AdapterFailure }
@@ -43,12 +54,21 @@ export function App() {
     setPhase({ kind: 'checking' });
 
     const tab = await getActiveTab();
-    if (!tab.supported || tab.tabId === undefined) {
+
+    // No readable URL means no access to this tab, which is the default.
+    // Whether the tab is a provider page is not something we are entitled to
+    // know yet, so ask the user to invoke rather than guessing either way.
+    if (tab.tabId === undefined || (!tab.url && !tab.invoked)) {
+      setPhase({ kind: 'needs-invocation' });
+      return;
+    }
+
+    if (!tab.supported) {
       setPhase({ kind: 'unsupported' });
       return;
     }
 
-    if (!(await pingContentScript(tab.tabId))) {
+    if (!(await ensureContentScript(tab.tabId))) {
       setPhase({ kind: 'not-ready' });
       return;
     }
@@ -167,11 +187,14 @@ export function App() {
           </div>
         )}
 
+        {phase.kind === 'needs-invocation' && <NeedsInvocation onRetry={load} />}
+
         {phase.kind === 'not-ready' && (
           <div className="empty">
-            <strong>Reload the page to continue</strong>
-            Chat Threads was installed or updated after this tab was opened.
-            Reload the ChatGPT or Claude tab, then check again.
+            <strong>Click the Chat Threads icon again</strong>
+            Permission to read this tab lapsed, which normally happens when the
+            page was reloaded. Click the Chat Threads icon in the toolbar to
+            give it access again.
             <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
               <button type="button" className="btn" onClick={() => void load()}>
                 Check again
@@ -212,6 +235,53 @@ export function App() {
             Reload
           </button>
         </footer>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The resting state: Chat Threads has no access to this tab and is saying so.
+ *
+ * It also offers the standing-permission upgrade, because a user who works
+ * this way constantly should be able to stop clicking the icon — but that has
+ * to be their explicit choice, not the default.
+ */
+function NeedsInvocation({ onRetry }: { onRetry: () => void }) {
+  const [granted, setGranted] = useState(false);
+
+  useEffect(() => {
+    void hasProviderAccess().then(setGranted);
+  }, []);
+
+  return (
+    <div className="empty">
+      <strong>Click the Chat Threads icon to begin</strong>
+      Open a ChatGPT or Claude conversation, then click the Chat Threads icon
+      in the toolbar. Chat Threads can only read a page you have pointed it at.
+      <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+        <button type="button" className="btn" onClick={onRetry}>
+          Check again
+        </button>
+      </div>
+      {!granted && (
+        <p className="hint" style={{ marginTop: 16 }}>
+          Tired of clicking?{' '}
+          <button
+            type="button"
+            className="btn link"
+            onClick={() => {
+              void requestProviderAccess().then((ok) => {
+                setGranted(ok);
+                if (ok) onRetry();
+              });
+            }}
+          >
+            Allow Chat Threads to read chatgpt.com and claude.ai
+          </button>{' '}
+          and it will load conversations without being asked each time. You can
+          take this back at any time from Chrome&rsquo;s extension settings.
+        </p>
       )}
     </div>
   );

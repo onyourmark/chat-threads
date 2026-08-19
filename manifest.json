@@ -11,7 +11,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Open Chat Threads",
+    "default_title": "Open Chat Threads on this conversation",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -25,26 +25,13 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "permissions": ["sidePanel", "storage"],
-  "host_permissions": [
+  "permissions": ["sidePanel", "storage", "activeTab", "scripting"],
+  "optional_host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
-    "https://claude.ai/*"
-  ],
-  "optional_host_permissions": [
+    "https://claude.ai/*",
     "https://api.anthropic.com/*",
     "https://api.openai.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "https://chatgpt.com/*",
-        "https://chat.openai.com/*",
-        "https://claude.ai/*"
-      ],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com"

@@ -16,7 +16,29 @@
 import { adapterForUrl } from '../adapters/registry';
 import { parsePanelRequest, type PanelResponse } from '../model/messages';
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+/**
+ * This script is injected on demand rather than declared in the manifest, so
+ * it can be asked to run again in a tab it is already in. The isolated world
+ * persists for the life of the page, so a flag there is enough to make a
+ * second injection a no-op instead of a second set of listeners.
+ */
+const GUARD = '__chatThreadsListenerInstalled';
+const world = globalThis as unknown as Record<string, boolean | undefined>;
+
+if (!world[GUARD]) {
+  world[GUARD] = true;
+  install();
+}
+
+function install(): void {
+  chrome.runtime.onMessage.addListener(handleMessage);
+}
+
+function handleMessage(
+  message: unknown,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: (response: PanelResponse) => void,
+): boolean {
   // Ignore anything that did not come from this extension.
   if (sender.id !== chrome.runtime.id) return false;
 
@@ -81,4 +103,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     default:
       return false;
   }
-});
+}
