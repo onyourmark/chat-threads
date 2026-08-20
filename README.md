@@ -4,11 +4,14 @@
 
 Long AI chats get messy. You start on one thing, drift into two others, paste
 something you would rather not keep — and somewhere in the middle you lose
-patience and tell the model exactly what you think of it. Chat Threads
-untangles one long AI conversation into separate topic conversations. Clean up
-your act on the way out: remove the rant, keep the useful context.
+patience and tell the model exactly what you think of it.
 
-**Your original ChatGPT or Claude conversation is never changed.**
+Chat Threads is a side panel for Chrome and Edge that untangles one long AI
+conversation into separate topic conversations. Clean up your act on the way
+out: remove the rant, keep the useful context.
+
+**Your original ChatGPT or Claude conversation is never changed.** Chat Threads
+works on a copy.
 
 ![Four-step walkthrough of Chat Threads: a ChatGPT conversation mixing a book proposal, a browser extension and travel plans; the side panel finding those as three separate topics; the user reviewing one topic and choosing which turns to remove; and the finished clean conversations ready to copy.](docs/assets/chat-threads-demo.gif)
 
@@ -19,30 +22,92 @@ the demo is invented for it — no real chat appears anywhere in this repository
 
 ---
 
-## What you can do
+## Three things it does
 
-Chat Threads is a Chrome side panel that opens next to ChatGPT or Claude. It
-reads the conversation you are looking at, makes its own working copy, and lets
-you reshape that copy:
+### See only your prompts
 
-- **See only your prompts** — read a long conversation back through your own
-  side of it, with the matching reply one click away.
-- **Remove what you do not want** — leave out whole turns, or edit a turn to
-  cut one paragraph and keep the rest.
-- **Find the separate discussions** inside one long thread. Do it by hand, or
-  press **Find Topics** and have a model you choose propose the split.
-- **Review and correct any suggestion** — a proposal fills in the same controls
-  you would use yourself, so you can rename a topic, move any turn, or throw
-  the whole thing away. Nothing is removed until you say so.
-- **Pull one topic out** into its own conversation, ready to continue
-  separately.
-- **Or cut one topic out** of the cleaned conversation — open it on its own,
-  untick anything worth keeping, and remove the rest in one go.
-- **Copy the result into a new ChatGPT or Claude chat** and pick up where you
-  left off, with the context you wanted and none of the rest.
+Scan a long conversation quickly by reading only what *you* asked, with the
+assistant's reply one click away when you want it.
 
-Everything except Find Topics works with no account, no API key, and no network
-requests at all.
+### Remove unwanted context
+
+Exclude whole turns, or edit the working copy of a turn to cut one paragraph
+and keep the rest. Removing turns from a ChatGPT or Claude conversation here
+never changes the conversation itself — only the copy you are about to carry
+forward.
+
+### Split one conversation into separate discussions
+
+Assign turns to topics by hand, or press **Find Topics** and have a model you
+choose propose the split. Review its choices, move anything it got wrong, and
+generate separate conversations that are ready to continue.
+
+Manual cleaning and splitting need no account, no API key and no network
+requests. Find Topics is the one optional extra, and it only runs when you
+press the button.
+
+## How it works
+
+**Open conversation → Reshape → Review → Copy → Continue**
+
+1. Open a ChatGPT or Claude conversation.
+2. Click the Chat Threads icon to open the side panel on that tab.
+3. Read back your prompts, remove what you do not want, or separate the topics
+   in a long AI chat.
+4. Preview the result.
+5. Copy the cleaned conversation, or one topic-specific conversation.
+6. Paste it into a new AI chat and continue from clean context.
+
+## Installation
+
+Chat Threads is not in the Chrome Web Store yet, so installing it means
+building it once. It takes about a minute and needs Node.js installed.
+
+```bash
+git clone https://github.com/onyourmark/chat-threads.git
+cd chat-threads
+npm install
+npm run icons     # generates the extension icons
+npm run build     # writes the unpacked extension to dist/
+```
+
+Then, in your browser:
+
+1. Go to `chrome://extensions` — or `edge://extensions` in Microsoft Edge.
+2. Turn on **Developer mode** (top right in Chrome, left sidebar in Edge).
+3. Click **Load unpacked** and choose the `dist/` folder this build created.
+4. Open a ChatGPT or Claude conversation.
+5. Click the Chat Threads toolbar icon. That one click both opens the side
+   panel and gives Chat Threads permission to read that tab.
+
+You will click the icon again after reloading the page, or on a different tab.
+If you would rather not, the panel offers to let you grant ongoing access to
+chatgpt.com and claude.ai, which you can revoke at any time.
+
+Requires Chrome or Edge 116 or later (the side panel API).
+
+## Private by design
+
+Chat Threads has no backend, no analytics and no telemetry. It has no permanent
+access to your browsing: it reads a conversation only after you explicitly
+invoke it on that tab, and that access ends when you navigate away. Ordinary
+cleaning and splitting happen entirely in your browser.
+
+- **No standing access to any website.** Out of the box it cannot read ChatGPT,
+  Claude or anything else until you click its toolbar icon on a tab. The
+  browser's extension page should show no site permissions, and site access set
+  to *on click*.
+- **Nothing leaves your machine for ordinary use.** Reading, viewing, editing,
+  excluding, splitting and generating transcripts are all local.
+- **One optional outbound request.** Find Topics sends the turns you kept to the
+  model provider *you* choose, using *your* API key, and only when you press the
+  button and grant permission. Nothing is sent because you opened the panel.
+- **Your API key stays in memory** for the browser session unless you explicitly
+  tick "remember this key".
+
+[PRIVACY.md](PRIVACY.md) describes exactly what is read, stored and sent, and
+names the code that makes each claim true. [SECURITY.md](SECURITY.md) covers the
+threat model and how untrusted conversation text is handled.
 
 ## Why it exists
 
@@ -61,7 +126,15 @@ The usual workaround is to select the whole page, copy it and hand-edit the
 mess. That breaks on long conversations, because the page only renders part of
 them.
 
-## Features
+Think of Chat Threads as a ChatGPT and Claude conversation editor that never
+edits the original. You reshape a copy — clean the AI conversation context you
+want to keep, split AI conversations that drifted into separate subjects — and
+then continue a cleaned AI conversation in a fresh chat.
+
+## Everything else it does
+
+The three above are the reason to install it. The rest of what it does, in one
+table:
 
 | | |
 | --- | --- |
@@ -79,54 +152,6 @@ them.
 | Optional AI topic suggestions | Bring your own API key; nothing is sent until you press the button |
 | Honest about retrieval | Reports "complete", "unconfirmed" or "incomplete" and never passes off a partial transcript as a whole one |
 | Preview, copy, download | Markdown, plain text and JSON; the preview is the exact text that gets copied |
-
-## Privacy
-
-Chat Threads has no server, no analytics and no telemetry. It does not collect,
-store or transmit your conversations.
-
-- **It holds no standing access to any website.** Out of the box it cannot read
-  ChatGPT, Claude or anything else until you click its toolbar icon on a tab,
-  and that access ends when you navigate away. Chrome's extension page should
-  show no site permissions and site access set to *on click*.
-- Reading, viewing, editing, excluding, splitting and generating transcripts
-  all happen locally in your browser.
-- The only outbound request the extension can ever make is the optional
-  **Find Topics** call, to the model provider *you* configure, using *your* API
-  key, and only when you press the button and grant permission.
-- Your API key is held in memory for the browser session by default and is
-  never written to disk unless you explicitly tick "remember this key".
-- Nothing is sent merely because you opened the side panel.
-
-The full statement is in [PRIVACY.md](PRIVACY.md), and it describes what the
-code actually does.
-
-## Installation
-
-Chat Threads is not in the Chrome Web Store yet. To run it:
-
-```bash
-git clone https://github.com/onyourmark/chat-threads.git
-cd chat-threads
-npm install
-npm run icons     # generates the extension icons
-npm run build     # writes the unpacked extension to dist/
-```
-
-Then, in Chrome:
-
-1. Go to `chrome://extensions`.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and choose the `dist/` folder.
-4. Open a ChatGPT or Claude conversation.
-5. Click the Chat Threads toolbar icon. That one click both opens the side
-   panel and gives Chat Threads permission to read that tab.
-
-You will click the icon again after reloading the page, or on a different tab.
-If you would rather not, the panel offers to let you grant ongoing access to
-chatgpt.com and claude.ai, which you can revoke at any time.
-
-Requires Chrome or Edge 116 or later (the side panel API).
 
 ## Development
 
@@ -148,6 +173,7 @@ in `tests/fixtures/`. Please do not commit real conversation data — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## How topic splitting works
+
 
 Every conversation starts with one topic already made: **Why is AI so stupid?**
 — for turns spent cursing at, arguing with, or venting at the AI rather than
@@ -239,6 +265,7 @@ so you can see which choices were yours.
 
 ## Current limitations
 
+
 Be aware of these before relying on it:
 
 - **Retrieval depends on undocumented behaviour.** ChatGPT and Claude do not
@@ -276,6 +303,7 @@ Be aware of these before relying on it:
 
 ## Architecture
 
+
 Four layers, with the provider-specific code confined to the first:
 
 ```
@@ -307,10 +335,21 @@ about anyone's work — reviewing changes to an extension that reads private
 conversations is a commitment the owner cannot make right now, and it seems
 better to say so than to leave pull requests unanswered.
 
-Bug reports and security reports are very welcome, and reports of a retrieval
-failure are the most useful of all. [CONTRIBUTING.md](CONTRIBUTING.md) explains
-how to write one — and please read the note about never sending real
-conversation data, which applies to screenshots too.
+Reports, on the other hand, are very welcome:
+
+- **[Report a bug](https://github.com/onyourmark/chat-threads/issues/new?template=bug_report.yml)**
+  when something behaves wrongly.
+- **[Report a retrieval failure](https://github.com/onyourmark/chat-threads/issues/new?template=retrieval_failure.yml)**
+  when a conversation will not load, or loads wrongly. This is the most useful
+  report there is: ChatGPT and Claude can change their internals without
+  notice, and the panel tells you exactly which part gave up.
+- **Security problems go privately**, through GitHub's security advisories
+  rather than a public issue — see [SECURITY.md](SECURITY.md).
+
+Whichever you use, please do not include conversation content. Both templates
+are written so you never need to, and a screenshot of the side panel is a
+screenshot of your own conversation. [CONTRIBUTING.md](CONTRIBUTING.md) has the
+detail.
 
 Forks are welcome under the licence. A fork is your software, not an official
 Chat Threads release, and it cannot alter anyone's installed copy. What counts
@@ -318,6 +357,7 @@ as an official release is set out in
 [docs/RELEASE-SECURITY.md](docs/RELEASE-SECURITY.md).
 
 ## Roadmap
+
 
 Ideas, not commitments:
 
@@ -334,9 +374,11 @@ analytics, or turning this into a general-purpose AI chat client.
 
 ## Patent Pending
 
+
 Certain technology implemented in Chat Threads is the subject of a U.S.
 provisional patent application filed August 20, 2026.
 
 ## Licence
+
 
 MIT — see [LICENSE](LICENSE).

@@ -2,10 +2,10 @@
 
 How an official Chat Threads build is produced and authorised.
 
-**Nothing has been published yet.** There is no Chrome Web Store listing, no
-public repository, no release, and no signing key. This document describes the
-process that will be followed before there is one, so the rules exist before
-the first release rather than after it.
+**No build has been released yet.** The source is public, but there is no
+Chrome Web Store listing, no release, and no signing key. This document
+describes the process that will be followed before there is one, so the rules
+exist before the first release rather than after it.
 
 ## What counts as official
 
