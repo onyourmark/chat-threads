@@ -29,17 +29,15 @@ interface Props {
 export function SplitView({ state, onChange }: Props) {
   const [proposalNotes, setProposalNotes] = useState<string[] | null>(null);
   const hasProposal = state.topics.some((t) => t.fromProposal);
+  const builtIn = state.topics.find((t) => t.builtIn);
+  const hasBuiltIn = builtIn !== undefined;
+  const builtInName = builtIn?.name ?? '';
 
   return (
     <>
       <p className="section-title">Topics</p>
-      {state.topics.length === 0 ? (
-        <p className="hint" style={{ marginBottom: 6 }}>
-          Add a topic for each separate discussion you want to pull out, then
-          assign the turns below. A turn marked <strong>Shared</strong> goes
-          into every topic; one left <strong>Unassigned</strong> goes into none.
-        </p>
-      ) : (
+
+      {state.topics.length > 0 && (
         <div className="topic-list">
           {state.topics.map((topic, i) => (
             <div className="topic-row" key={topic.id}>
@@ -64,6 +62,20 @@ export function SplitView({ state, onChange }: Props) {
           ))}
         </div>
       )}
+
+      <p className="hint" style={{ marginBottom: 6 }}>
+        Add a topic for each separate discussion you want to pull out, then
+        assign the turns below. A turn marked <strong>Shared</strong> goes into
+        every topic; one left <strong>Unassigned</strong> goes into none.
+        {hasBuiltIn && (
+          <>
+            {' '}
+            <strong>{builtInName}</strong> is here to start with, for turns
+            spent arguing with the AI rather than getting work done. Rename it,
+            remove it, or leave it empty.
+          </>
+        )}
+      </p>
 
       <div className="row" style={{ marginBottom: 10 }}>
         <button

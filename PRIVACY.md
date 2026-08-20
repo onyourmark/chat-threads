@@ -91,9 +91,11 @@ press of the button. When you press it:
    **edited** text is sent, never the original — so if you edited something out
    of a turn, the removed text is not transmitted.
 3. Each turn is shortened to its first 1,500 characters. Only the turn number,
-   the role, and that text are sent, plus the conversation title
+   the role, and that text are sent, plus the conversation title and the name
+   of the built-in topic — so the model keeps it instead of inventing a
+   duplicate. If you renamed that topic, the name you chose is what goes.
    (`src/ai/prompt.ts` — `buildAnalysisInput` selects these fields explicitly,
-   so a new field added elsewhere cannot start being transmitted by accident).
+   so a new field added elsewhere cannot start being transmitted by accident.)
 4. That payload goes to `https://api.anthropic.com` or `https://api.openai.com`
    — whichever you chose — with your API key.
 

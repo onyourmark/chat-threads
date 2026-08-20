@@ -63,6 +63,7 @@ them.
 | Exclude and restore | Leave a turn out of the result, put it back at any time |
 | Edit working copies | Change a turn's text; the original is kept so you can compare and restore |
 | Manual topic splitting | Any number of topics, editable names, per-turn assignment, plus Shared and Unassigned |
+| One topic made for you | "Why is AI so stupid?" — for turns spent cursing at, arguing with or venting at the AI. Rename it, remove it, or ignore it |
 | Optional AI topic suggestions | Bring your own API key; nothing is sent until you press the button |
 | Honest about retrieval | Reports "complete", "unconfirmed" or "incomplete" and never passes off a partial transcript as a whole one |
 | Preview, copy, download | Markdown, plain text and JSON; the preview is the exact text that gets copied |
@@ -143,7 +144,17 @@ in `tests/fixtures/`. Please do not commit real conversation data — see
 
 ## How topic splitting works
 
-You create topics and assign each turn to one of:
+Every conversation starts with one topic already made: **Why is AI so stupid?**
+— for turns spent cursing at, arguing with, or venting at the AI rather than
+getting anything done. Those are usually the first thing you want out of a
+transcript you are about to carry forward, and picking them out by hand is
+tedious.
+
+It is a default, not a fixture. Rename it, remove it, or leave it empty and
+nothing else changes; it only appears in your output once something is in it.
+Reset Changes brings it back.
+
+You create further topics and assign each turn to one of:
 
 - **a topic** — the turn appears in that topic's conversation only;
 - **Shared** — the turn appears, in full, in *every* topic conversation. Use it
@@ -167,6 +178,15 @@ Pressing **Find Topics** sends the turns you have kept — shortened to the firs
 1,500 characters each — to the model provider you configured, and asks it to
 return a strict JSON structure: a list of topics, and one assignment per turn,
 with an "uncertain" flag it is told to set whenever it is unsure.
+
+It is also told that **Why is AI so stupid?** already exists, so it keeps that
+topic rather than inventing its own version of it, and it is given rules for
+what goes in: swearing at the assistant, arguing with it about its own
+behaviour, venting at it — along with the assistant's side of that exchange, so
+you can lift the whole thing out in one go. The rules it is given are mostly
+about what does *not* belong there: ordinary discussion about AI, technical
+criticism, corrections, and plain disagreement all stay with the work, even
+when you were annoyed at the time.
 
 That reply is validated before anything happens. A malformed reply, an invented
 turn number, a topic that was not proposed, or a name containing control

@@ -15,7 +15,7 @@ import {
   TOPIC_PROPOSAL_SCHEMA,
   validateTopicProposal,
 } from '../schema';
-import { buildUserPrompt, SYSTEM_PROMPT } from '../prompt';
+import { buildUserPrompt, reservedTopicIds, SYSTEM_PROMPT } from '../prompt';
 import type {
   AnalysisInput,
   AnalyzeOptions,
@@ -127,6 +127,7 @@ export class AnthropicAnalyzer implements TopicAnalyzer {
     return validateTopicProposal(
       parsed,
       input.turns.map((t) => t.number),
+      reservedTopicIds(input),
     );
   }
 }

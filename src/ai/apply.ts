@@ -8,6 +8,7 @@
 
 import type { Topic } from '../model/types';
 import { SHARED } from '../model/types';
+import { BUILT_IN_TOPIC_MODEL_ID } from '../model/default-topic';
 import { setAssignments, setTopics, type WorkingState } from '../operations/working';
 import { SHARED_TOPIC, type TopicProposal } from './schema';
 import type { AnalyzerConfig } from './types';
@@ -28,17 +29,36 @@ export function applyProposal(
 ): WorkingState {
   const idFor = (modelId: string) => `ai-${modelId}`;
 
-  const topics: Topic[] = proposal.topics.map((t) => ({
-    id: idFor(t.id),
-    name: t.name,
-    description: t.description,
-    fromProposal: true,
-  }));
+  // The built-in topic survives a proposal, keeping whatever name the user has
+  // given it. Without this, applying a proposal would silently replace it with
+  // the model's own version of the same idea — or drop it entirely.
+  const builtIn = state.topics.find((t) => t.builtIn);
+
+  const topics: Topic[] = [
+    ...(builtIn ? [builtIn] : []),
+    ...proposal.topics.map((t) => ({
+      id: idFor(t.id),
+      name: t.name,
+      description: t.description,
+      fromProposal: true,
+    })),
+  ];
 
   const bySequence = new Map(state.turns.map((t) => [t.sequence, t.id]));
   const updates = proposal.assignments.flatMap((a) => {
     const turnId = bySequence.get(a.turn);
     if (!turnId) return [];
+
+    // The model refers to the built-in topic by a reserved id. If the user has
+    // removed that topic, there is nothing to assign to, so the turn is left
+    // where it was rather than the topic being resurrected behind their back.
+    if (a.topic === BUILT_IN_TOPIC_MODEL_ID) {
+      if (!builtIn) return [];
+      return [
+        { turnId, assignment: builtIn.id, uncertain: a.uncertain },
+      ];
+    }
+
     return [
       {
         turnId,

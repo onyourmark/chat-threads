@@ -19,6 +19,7 @@ import {
   type GeneratedConversation,
 } from '../../operations/transcript';
 import type { WorkingState } from '../../operations/working';
+import { isPristineDefaultTopic } from '../../model/default-topic';
 import { copyText, downloadText } from '../chrome';
 
 interface Props {
@@ -38,15 +39,29 @@ export function OutputView({ state }: Props) {
 
   const conversations = useMemo(() => {
     const cleaned = generateCleaned(state);
-    return state.topics.length > 0
-      ? [cleaned, ...generateSplit(state)]
-      : [cleaned];
+
+    // The built-in topic exists on every conversation, so showing an empty
+    // card for it by default would put a heading about swearing at the top of
+    // everyone's output. It appears once it is used or renamed; a topic the
+    // user made themselves always appears, empty or not, so they can see it
+    // came out empty.
+    const split = generateSplit(state).filter((conversation) => {
+      const topic = state.topics.find((t) => t.id === conversation.topicId);
+      if (!topic || !isPristineDefaultTopic(topic)) return true;
+      return conversation.turns.length > 0;
+    });
+
+    return split.length > 0 ? [cleaned, ...split] : [cleaned];
   }, [state]);
 
   const render = (c: GeneratedConversation) =>
     plainText ? renderPlainText(c, options) : renderMarkdown(c, options);
 
-  const stranded = state.topics.length > 0 ? unassignedIncludedTurns(state) : [];
+  // Only worth warning about once topic conversations are actually being
+  // produced. Before that, "not in any topic" describes every turn and means
+  // nothing.
+  const stranded =
+    conversations.length > 1 ? unassignedIncludedTurns(state) : [];
 
   const doCopy = async (c: GeneratedConversation) => {
     const ok = await copyText(render(c));

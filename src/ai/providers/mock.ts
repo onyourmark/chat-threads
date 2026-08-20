@@ -7,6 +7,7 @@
  */
 
 import { parseModelJson, validateTopicProposal } from '../schema';
+import { reservedTopicIds } from '../prompt';
 import type {
   AnalysisInput,
   AnalyzeOptions,
@@ -36,6 +37,7 @@ export class MockAnalyzer implements TopicAnalyzer {
     return validateTopicProposal(
       parsed,
       input.turns.map((t) => t.number),
+      reservedTopicIds(input),
     );
   }
 }

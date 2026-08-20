@@ -18,9 +18,20 @@ import {
   renderMarkdown,
   unassignedIncludedTurns,
 } from '../src/operations/transcript';
+import { BUILT_IN_TOPIC_ID } from '../src/model/default-topic';
 import { chatgptMixedTopics } from './fixtures/chatgpt';
 
+/**
+ * The mixed-topic conversation with the built-in topic taken away, so these
+ * tests exercise manual topic mechanics on their own. The built-in topic has
+ * its own suite in tests/default-topic.test.ts.
+ */
 function load(): WorkingState {
+  return removeTopic(loadWithDefaultTopic(), BUILT_IN_TOPIC_ID);
+}
+
+/** The conversation exactly as the panel would present it. */
+function loadWithDefaultTopic(): WorkingState {
   return createWorkingState(
     freezeConversation(
       normalizeChatGptConversation(chatgptMixedTopics, {
@@ -54,6 +65,11 @@ function splitIntoThree(state: WorkingState): WorkingState {
 
 describe('manual topic splitting', () => {
   beforeEach(() => resetTopicIds());
+
+  it('starts with only the built-in topic, which these tests remove', () => {
+    expect(loadWithDefaultTopic().topics).toHaveLength(1);
+    expect(load().topics).toHaveLength(0);
+  });
 
   it('creates and renames topics', () => {
     let s = addTopic(load());

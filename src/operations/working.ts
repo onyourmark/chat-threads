@@ -14,6 +14,10 @@ import type {
   Turn,
 } from '../model/types';
 import { SHARED, UNASSIGNED } from '../model/types';
+import {
+  defaultTopics,
+  isPristineDefaultTopic,
+} from '../model/default-topic';
 
 export interface WorkingState {
   /** The retrieved conversation. Immutable. */
@@ -24,7 +28,13 @@ export interface WorkingState {
   readonly topics: readonly Topic[];
 }
 
-/** Start a working session from a freshly retrieved conversation. */
+/**
+ * Start a working session from a freshly retrieved conversation.
+ *
+ * Every conversation starts with the built-in topic already present. Because
+ * `resetAll` goes through here, Reset Changes puts it back — it is part of the
+ * starting state, not an edit.
+ */
 export function createWorkingState(source: SourceConversation): WorkingState {
   return {
     source,
@@ -33,7 +43,7 @@ export function createWorkingState(source: SourceConversation): WorkingState {
       attachments: [...t.attachments],
       references: [...t.references],
     })),
-    topics: [],
+    topics: defaultTopics(),
   };
 }
 
@@ -278,7 +288,14 @@ export function stats(state: WorkingState): WorkingStats {
 
 /** True when anything has been changed from the retrieved conversation. */
 export function hasChanges(state: WorkingState): boolean {
-  if (state.topics.length > 0) return true;
+  // The built-in topic is part of the starting state, so its mere presence is
+  // not a change; renaming it, removing it, or adding to it is.
+  const topicsAreDefault =
+    state.topics.length === 1 &&
+    state.topics[0] !== undefined &&
+    isPristineDefaultTopic(state.topics[0]);
+  if (!topicsAreDefault) return true;
+
   return state.turns.some(
     (t) => !t.included || t.edited || t.assignment !== UNASSIGNED,
   );

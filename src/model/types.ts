@@ -81,6 +81,13 @@ export interface Topic {
   description?: string;
   /** True when this topic came from an AI proposal rather than the user. */
   fromProposal?: boolean;
+  /**
+   * True for the topic Chat Threads creates for every conversation. It stays
+   * true if the user renames it, because it is still the same slot — that is
+   * what lets an AI proposal preserve it instead of making a duplicate. See
+   * `model/default-topic.ts`.
+   */
+  builtIn?: boolean;
 }
 
 /**

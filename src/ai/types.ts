@@ -24,10 +24,23 @@ export interface AnalysisTurn {
   truncated: boolean;
 }
 
+/** A topic that already exists, as the model is told about it. */
+export interface AnalysisTopic {
+  /** The id the model must use in its assignments. */
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export interface AnalysisInput {
   turns: AnalysisTurn[];
   /** The conversation title, when the provider gave one. */
   title?: string;
+  /**
+   * Topics that already exist and must be kept rather than re-invented. The
+   * model may assign turns to these ids without proposing them.
+   */
+  existingTopics: AnalysisTopic[];
 }
 
 export type AnalyzerResult =

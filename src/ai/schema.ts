@@ -133,6 +133,7 @@ function cleanText(value: string, max: number): string {
 export function validateTopicProposal(
   raw: unknown,
   validTurnNumbers: readonly number[],
+  reservedTopicIds: readonly string[] = [],
 ): ValidationResult {
   const errors: string[] = [];
   const notes: string[] = [];
@@ -151,7 +152,9 @@ export function validateTopicProposal(
   const rawTopics = raw.topics as unknown[];
   const rawAssignments = raw.assignments as unknown[];
 
-  if (rawTopics.length === 0) {
+  // An empty list is only acceptable when a topic already exists that every
+  // turn could belong to — a conversation that is nothing but venting, say.
+  if (rawTopics.length === 0 && reservedTopicIds.length === 0) {
     return { ok: false, errors: ['The model proposed no topics.'] };
   }
   if (rawTopics.length > MAX_TOPICS) {
@@ -161,8 +164,10 @@ export function validateTopicProposal(
     };
   }
 
+  const reserved = new Set(reservedTopicIds);
   const topics: ProposedTopic[] = [];
   const seenIds = new Set<string>();
+  let reservedProposed = 0;
   for (const [i, t] of rawTopics.entries()) {
     if (!isRecord(t)) {
       errors.push(`Topic ${i + 1} was not an object.`);
@@ -186,6 +191,12 @@ export function validateTopicProposal(
       errors.push(`Two topics used the id "${id}".`);
       continue;
     }
+    // The model was told this topic already exists. Echoing it back is not an
+    // error, but it must not become a second copy of the same topic.
+    if (reserved.has(id)) {
+      reservedProposed += 1;
+      continue;
+    }
     seenIds.add(id);
     const description =
       typeof t.description === 'string'
@@ -195,7 +206,9 @@ export function validateTopicProposal(
   }
 
   if (errors.length > 0) return { ok: false, errors };
-  if (topics.length === 0) {
+  // A proposal is usable if it can place turns somewhere: either into a topic
+  // it proposed, or into one that already existed.
+  if (topics.length === 0 && reservedTopicIds.length === 0) {
     return { ok: false, errors: ['No usable topics were returned.'] };
   }
 
@@ -215,7 +228,7 @@ export function validateTopicProposal(
     }
     if (placed.has(turn)) continue; // first assignment wins
     const topic = typeof a.topic === 'string' ? cleanText(a.topic, 64) : '';
-    if (topic !== SHARED_TOPIC && !seenIds.has(topic)) {
+    if (topic !== SHARED_TOPIC && !seenIds.has(topic) && !reserved.has(topic)) {
       unknownTopicCount += 1;
       continue;
     }
@@ -228,6 +241,11 @@ export function validateTopicProposal(
       ok: false,
       errors: ['The model did not place any turn into a topic.'],
     };
+  }
+  if (reservedProposed > 0) {
+    notes.push(
+      `The model re-proposed ${reservedProposed} topic${reservedProposed === 1 ? '' : 's'} that already existed. The existing one${reservedProposed === 1 ? ' was' : 's were'} kept.`,
+    );
   }
   if (unknownTurnCount > 0) {
     notes.push(

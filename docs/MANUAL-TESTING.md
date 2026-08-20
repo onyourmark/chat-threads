@@ -254,6 +254,25 @@ Use a conversation that genuinely covers two or three subjects.
    cleaned conversation.
 9. **Expect:** each topic conversation is in chronological order.
 
+## 12b. The built-in topic
+
+1. Open **Split** on any conversation. **Expect:** a topic called
+   **Why is AI so stupid?** is already there, with nothing assigned to it.
+2. Open **Output**. **Expect:** only "Cleaned Conversation" — an empty built-in
+   topic should not appear.
+3. Back in Split, assign a turn to it, then open Output. **Expect:** it now
+   appears as a topic conversation, and Copy works on it.
+4. Rename it, then press **Reset changes**. **Expect:** the original name is
+   back and nothing is assigned to it.
+5. Remove it, then press **Reset changes**. **Expect:** it returns.
+6. If you have an API key, run **Find Topics** on a conversation where you did
+   in fact lose patience with the model. **Expect:** the built-in topic is
+   still there, still named what you called it, and is **not** duplicated by a
+   second topic meaning the same thing.
+7. **Expect** that ordinary technical criticism — telling the model its code is
+   wrong — is *not* swept into it. This is the failure mode worth watching for;
+   report it if you see it, with the turn redacted.
+
 ## 13. Copy and paste — the actual point
 
 1. Tick "Start with a note explaining this is an earlier conversation".

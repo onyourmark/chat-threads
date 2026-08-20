@@ -249,13 +249,13 @@ describe('applying a proposal', () => {
     if (!result.ok) return;
 
     const next = applyProposal(state, result.proposal);
+    const proposed = next.topics.filter((t) => t.fromProposal);
 
-    expect(next.topics).toHaveLength(3);
-    expect(next.topics[0]?.name).toBe('Browser extension design');
-    expect(next.topics.every((t) => t.fromProposal)).toBe(true);
+    expect(proposed).toHaveLength(3);
+    expect(proposed[0]?.name).toBe('Browser extension design');
     expect(next.turns[0]?.assignment).toBe(SHARED);
-    expect(next.turns[2]?.assignment).toBe(next.topics[0]?.id);
-    expect(next.turns[6]?.assignment).toBe(next.topics[2]?.id);
+    expect(next.turns[2]?.assignment).toBe(proposed[0]?.id);
+    expect(next.turns[6]?.assignment).toBe(proposed[2]?.id);
   });
 
   it('marks uncertain turns and leaves the rest unmarked', async () => {
@@ -278,10 +278,15 @@ describe('applying a proposal', () => {
     );
     if (!result.ok) throw new Error('expected ok');
 
-    const out = generateSplit(applyProposal(state, result.proposal));
-    expect(out).toHaveLength(3);
-    expect(renderMarkdown(out[0]!)).toContain('store its working copy');
-    expect(renderMarkdown(out[2]!)).toContain('Lisbon');
+    const next = applyProposal(state, result.proposal);
+    const out = generateSplit(next);
+    const proposed = out.filter((c) =>
+      next.topics.some((t) => t.id === c.topicId && t.fromProposal),
+    );
+
+    expect(proposed).toHaveLength(3);
+    expect(renderMarkdown(proposed[0]!)).toContain('store its working copy');
+    expect(renderMarkdown(proposed[2]!)).toContain('Lisbon');
   });
 
   it('lets a manual change override the proposal', async () => {
@@ -292,7 +297,7 @@ describe('applying a proposal', () => {
     if (!result.ok) throw new Error('expected ok');
 
     const applied = applyProposal(state, result.proposal);
-    const travelTopic = applied.topics[2]!.id;
+    const travelTopic = applied.topics.filter((t) => t.fromProposal)[2]!.id;
 
     // The model put turn 4 in "GitHub promotion"; the user moves it.
     const corrected = setAssignment(applied, 'chatgpt-4', travelTopic);
@@ -300,7 +305,9 @@ describe('applying a proposal', () => {
     expect(corrected.turns[4]?.assignment).toBe(travelTopic);
     expect(corrected.turns[4]?.assignmentOverridden).toBe(true);
 
-    const out = generateSplit(corrected);
+    const out = generateSplit(corrected).filter((c) =>
+      corrected.topics.some((t) => t.id === c.topicId && t.fromProposal),
+    );
     expect(renderMarkdown(out[2]!)).toContain('GitHub project noticed');
     expect(renderMarkdown(out[1]!)).not.toContain('GitHub project noticed');
   });
@@ -328,8 +335,9 @@ describe('applying a proposal', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.length).toBeGreaterThan(0);
-    // Nothing was applied.
-    expect(state.topics).toHaveLength(0);
+    // Nothing was applied: the starting state is untouched, which means the
+    // built-in topic and nothing else.
+    expect(state.topics.map((t) => t.builtIn)).toEqual([true]);
     expect(state.turns.every((t) => t.assignment === UNASSIGNED)).toBe(true);
   });
 
@@ -352,7 +360,11 @@ describe('what gets sent to a model', () => {
     const keys = Object.keys(input.turns[0]!).sort();
 
     expect(keys).toEqual(['number', 'role', 'text', 'truncated']);
-    expect(Object.keys(input).sort()).toEqual(['title', 'turns']);
+    expect(Object.keys(input).sort()).toEqual([
+      'existingTopics',
+      'title',
+      'turns',
+    ]);
   });
 
   it('does not send excluded turns', () => {

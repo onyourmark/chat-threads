@@ -158,6 +158,12 @@ afterEach(() => {
 
 const text = () => container.textContent ?? '';
 
+/** The view tab with this label. */
+const tab = (label: string): HTMLButtonElement =>
+  Array.from(container.querySelectorAll('[role="tab"]')).find(
+    (t) => t.textContent === label,
+  ) as HTMLButtonElement;
+
 describe('the side panel mounts', () => {
   it('always shows the product name and tagline', async () => {
     installFakeChrome({ loadResult: goodConversation() });
@@ -338,6 +344,48 @@ describe('a loaded conversation', () => {
     expect(text()).toContain('the original conversation is left exactly as it is');
     expect(text()).toContain('Exclude');
     expect(text()).toContain('Edit');
+  });
+
+  it('offers the built-in topic in Split, ready to use', async () => {
+    await mount();
+    await act(async () => tab('Split').click());
+
+    const names = Array.from(
+      container.querySelectorAll('.topic-row input'),
+    ).map((i) => (i as HTMLInputElement).value);
+
+    expect(names).toEqual(['Why is AI so stupid?']);
+    expect(text()).toContain('arguing with the AI rather than getting work done');
+    // And it is offered as a destination for every turn.
+    const options = Array.from(
+      container.querySelectorAll('select option'),
+    ).map((o) => o.textContent);
+    expect(options).toContain('1. Why is AI so stupid?');
+  });
+
+  it('does not clutter Output with the unused built-in topic', async () => {
+    await mount();
+    await act(async () => tab('Output').click());
+
+    // Only the cleaned conversation: an empty topic nobody asked for should
+    // not put a heading about swearing at the top of the output.
+    expect(text()).toContain('Cleaned Conversation');
+    expect(text()).not.toContain('Conversation 1: Why is AI so stupid?');
+    expect(text()).not.toContain('not in any topic');
+  });
+
+  it('shows the built-in topic in Output once a turn is put in it', async () => {
+    await mount();
+    await act(async () => tab('Split').click());
+
+    const select = container.querySelector('select') as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'built-in-venting';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await act(async () => tab('Output').click());
+    expect(text()).toContain('Conversation 1: Why is AI so stupid?');
   });
 
   it('renders conversation text as text, never as markup', async () => {

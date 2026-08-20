@@ -8,8 +8,12 @@
  */
 
 import type { WorkingState } from '../operations/working';
-import type { AnalysisInput, AnalysisTurn } from './types';
+import type { AnalysisInput, AnalysisTopic, AnalysisTurn } from './types';
 import { TOPIC_PROPOSAL_SCHEMA } from './schema';
+import {
+  BUILT_IN_TOPIC_MODEL_ID,
+  BUILT_IN_TOPIC_RULES,
+} from '../model/default-topic';
 
 export interface BuildOptions {
   /**
@@ -48,9 +52,26 @@ export function buildAnalysisInput(
       };
     });
 
+  // Topics that already exist are described to the model so it keeps them
+  // instead of inventing a near-duplicate. Only the built-in topic gets a
+  // reserved id; the user's own topics are theirs to organise, and re-running
+  // an analysis is allowed to reorganise them.
+  const existingTopics: AnalysisTopic[] = state.topics
+    .filter((t) => t.builtIn)
+    .map((t) => ({
+      id: BUILT_IN_TOPIC_MODEL_ID,
+      name: t.name,
+      description: t.description,
+    }));
+
   return state.source.title
-    ? { turns, title: state.source.title }
-    : { turns };
+    ? { turns, title: state.source.title, existingTopics }
+    : { turns, existingTopics };
+}
+
+/** The topic ids a model may use without having proposed them. */
+export function reservedTopicIds(input: AnalysisInput): string[] {
+  return input.existingTopics.map((t) => t.id);
 }
 
 /** How many characters the payload will contain, for the confirmation dialog. */
@@ -83,9 +104,23 @@ export function buildUserPrompt(input: AnalysisInput): string {
     'Return JSON matching this schema:',
     JSON.stringify(TOPIC_PROPOSAL_SCHEMA),
     '',
-    'Here are the turns. Use the number shown for each one.',
-    '',
   );
+
+  if (input.existingTopics.length > 0) {
+    lines.push('These topics already exist. Keep them; do not re-create them.');
+    for (const topic of input.existingTopics) {
+      const description = topic.description ? ` — ${topic.description}` : '';
+      lines.push(`- id "${topic.id}": ${topic.name}${description}`);
+    }
+    lines.push('');
+    // The built-in topic needs its rules spelled out, because "frustration"
+    // read loosely would swallow every bug report in the conversation.
+    if (input.existingTopics.some((t) => t.id === BUILT_IN_TOPIC_MODEL_ID)) {
+      lines.push(BUILT_IN_TOPIC_RULES, '');
+    }
+  }
+
+  lines.push('Here are the turns. Use the number shown for each one.', '');
 
   for (const t of input.turns) {
     const speaker = t.role === 'user' ? 'User' : 'Assistant';
