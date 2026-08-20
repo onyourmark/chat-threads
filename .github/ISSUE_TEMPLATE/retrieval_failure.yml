@@ -1,0 +1,90 @@
+name: Retrieval failure
+description: A conversation would not load, or loaded wrongly.
+labels: ["retrieval"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        This is the most useful report you can file. Chat Threads reads
+        conversations through interfaces ChatGPT and Claude do not publish, so
+        a provider change can break retrieval without warning — and the panel
+        is built to tell you exactly which part failed.
+
+
+        **Please do not paste conversation content.** Everything below can be
+        answered without it.
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Which site
+      options:
+        - ChatGPT
+        - Claude
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What went wrong
+      options:
+        - It refused to load and showed an error
+        - It loaded, but turns were missing
+        - It loaded the wrong branch (an edited or regenerated version)
+        - It loaded, but something in the text looked wrong
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: panel-message
+    attributes:
+      label: What the panel said
+      description: >-
+        The full text of the error box, including the adapter name, the reason,
+        and every line of the diagnostics list. Paste it verbatim — it contains
+        no conversation text.
+      render: text
+
+  - type: dropdown
+    id: completeness
+    attributes:
+      label: What the retrieval status showed
+      description: The pill near the top of the panel.
+      options:
+        - Complete
+        - Unconfirmed
+        - Incomplete
+        - No conversation was loaded at all
+        - I did not notice
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: Roughly what the conversation was like
+      description: >-
+        Its shape, not its content. Roughly how many turns? Very long messages?
+        Attachments or images? Code blocks? Had you edited a prompt or asked
+        for another try, so it has branches?
+      placeholder: "About 300 turns, two attachments, several long code blocks, one edited prompt."
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "Chrome 151, or Edge 151 — see chrome://version"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: >-
+            I have described the conversation without including any of its
+            content.
+          required: true
