@@ -128,12 +128,14 @@ for the account no longer being sufficient to ship code.
 
 These are prerequisites, not aspirations:
 
-- [ ] Claude live retrieval is tested against a real signed-in account
-      (currently untested — see [LIMITATIONS.md](LIMITATIONS.md)).
-- [ ] The `activeTab` retrieval path is re-verified live on both providers
-      after the permission change described in PRIVACY.md.
+- [x] Claude live retrieval is tested against a real signed-in account.
+- [x] The `activeTab` retrieval path and per-tab state isolation are verified
+      live in a Chromium browser.
+- [ ] Anthropic Find Topics is tested with a real Anthropic key, or the store
+      listing is clear that only the OpenAI path has been exercised.
 - [ ] The full procedure in [MANUAL-TESTING.md](MANUAL-TESTING.md) is completed
-      and recorded.
+      and recorded — the file-reference fix in particular is still covered only
+      by automated tests.
 - [ ] A Chrome Web Store developer account exists and its one-off fee is paid.
 - [ ] Store listing copy, screenshots and a privacy disclosure are prepared,
       and the disclosure matches PRIVACY.md.

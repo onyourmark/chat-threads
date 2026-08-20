@@ -76,47 +76,70 @@ That is one account, of one type, on one browser. It does **not** establish
 compatibility across ChatGPT account types (Team, Enterprise, Edu are all
 untested), nor that every conversation shape behaves the same.
 
-### Claude: still not tested live
+### Claude: tested, and it worked
 
-Claude retrieval has **never been run against a signed-in account**. It is
-implemented and unit-tested against fixtures, and the endpoint shapes come from
-documented-by-observation behaviour rather than a live capture. Treat Claude
-support as unverified. In particular these are unknown:
+Claude retrieval has been run against a real signed-in Claude conversation.
+Claude was recognised, the conversation loaded, and the normal Chat Threads
+workflow ran on it.
+
+Reading a Claude conversation needs no API key. It goes out on the Claude
+session the browser already holds, exactly as ChatGPT retrieval does.
+
+That is one account, on one browser. It does **not** establish compatibility
+across Claude account types, across organizations, or with future versions of
+the site. These in particular remain untested rather than disproven:
 
 - whether the organization lookup picks the right organization on an account
   that belongs to more than one;
-- whether a long real conversation loads completely;
 - whether branch reconstruction matches what the page shows after an edit or a
   retry.
 
-### OpenAI topic proposals: one successful live call
+### OpenAI topic proposals: successful live calls
 
-A real OpenAI API request has completed successfully with a user-supplied key,
+Real OpenAI API requests have completed successfully with a user-supplied key,
 producing sensible topic names and turn assignments that Output turned into
-separate conversations.
+separate conversations — including for a conversation retrieved from Claude.
+The Find Topics provider is chosen independently of where the conversation came
+from, so an OpenAI key analyses a Claude conversation perfectly well.
 
-One successful run is not reliability. One observed run was slow and appeared
-to hit a temporary retry or reload condition before it succeeded, so latency
-and transient failure handling are open questions. There is no retry logic and
-no request timeout beyond the browser's own.
+That is not reliability. One observed run was slow and appeared to hit a
+temporary retry or reload condition before it succeeded, so latency and
+transient failure handling are open questions. On a very long conversation the
+request can take several minutes. There is no retry logic and no request
+timeout beyond the browser's own.
 
 ### Anthropic topic proposals: not tested live
 
 The Anthropic client is implemented and unit-tested; no request has been made
-with a real Anthropic key.
+with a real Anthropic key. An Anthropic key is needed only if Anthropic is
+chosen as the Find Topics provider — it is never needed to read a conversation
+from either provider.
 
-### The current permission model: not tested live
+### The permission model and tab binding: tested, and they work
 
-After the live run, the extension was changed to hold **no standing site
-access**: it now uses `activeTab` and injects its reader script on demand. The
-live testing above was done with the previous build, which had permanent host
-access to the provider sites.
+The extension holds **no standing site access**: it uses `activeTab` and injects
+its reader script on demand. That path has now been exercised in Microsoft Edge,
+a Chromium browser, and behaves as intended:
 
-The retrieval mechanism itself is unchanged — the same script, doing the same
-same-origin fetch, in the same isolated world — but *how it gets into the page*
-is new and has not been exercised in a browser. Neither Chrome 151 nor Edge 151
-still honours `--load-extension`, so this could not be automated. It is the
-first thing to re-test; see [MANUAL-TESTING.md](MANUAL-TESTING.md).
+- invoking Chat Threads explicitly on a conversation loads it;
+- switching to a second conversation does **not** load it — nothing is read
+  without an explicit invocation;
+- returning to the first conversation still shows its working state;
+- invoking on the second conversation loads it independently;
+- returning to the first one again still shows its own state.
+
+State is therefore isolated by tab and conversation, which is what the
+`activeTab` grant and the session store were built to guarantee.
+
+One point about what this looks like in use: the side panel does **not**
+disappear when you switch tabs. Chromium gives a window a single side panel, so
+the panel stays visibly open — it simply shows a neutral "Ready when you are"
+state for a conversation it has not been pointed at, instead of reading it. The
+guarantee is about what is read, not about the panel vanishing.
+
+This could not be automated: neither Chrome 151 nor Edge 151 still honours
+`--load-extension`, so it was checked by hand. The procedure is in
+[MANUAL-TESTING.md](MANUAL-TESTING.md).
 
 ## Provider-private markers may still surprise us
 
@@ -156,9 +179,10 @@ chain-of-thought blocks are skipped. This is a deliberate scope decision, not
 an oversight.
 
 **Working state is not persisted.** Exclusions, edits and topic assignments
-live in the side panel's memory. Closing the panel, reloading the conversation,
-or switching to a different conversation discards them. Generate and copy
-before you leave.
+live in the side panel's memory, kept separately for each tab and conversation.
+Switching tabs or conversations does not lose them — you can come back — but
+closing the panel does, and so does reloading a conversation from the provider.
+Nothing is written to storage. Generate and copy before you finish.
 
 **Only one conversation at a time.** There is no way to combine turns from two
 different conversations.
@@ -171,8 +195,9 @@ adapter uses the first one Claude lists with chat enabled. If your conversation
 lives in a different organization, retrieval will report that the conversation
 was not found.
 
-**Chrome only, 116 or later.** The side panel API is Chrome-specific. Firefox
-and Safari are out of scope for version 1.
+**Chromium only, 116 or later.** The side panel API is Chromium's. Chrome and
+Microsoft Edge both work — the live testing was done in Edge. Firefox and
+Safari are out of scope for version 1.
 
 **Very long conversations are limited by memory and by the clipboard.** There
 is no hard cap, but an extremely long transcript may be slow to render and

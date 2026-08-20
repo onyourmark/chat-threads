@@ -140,10 +140,12 @@ actually said.
   control characters and marker delimiters are stripped, the length is capped,
   and it is rendered as text, never as markup. It is not otherwise verified —
   a name is what the provider said it was.
-- **The `activeTab` retrieval path has not been exercised in a browser.**
-  Neither Chrome 151 nor Edge 151 still honours `--load-extension`, so it could
-  not be tested automatically. The permission reduction is verifiable by reading
-  `manifest.json`; that the injection works end to end is not yet confirmed.
+- **The `activeTab` retrieval path cannot be tested automatically.** Neither
+  Chrome 151 nor Edge 151 still honours `--load-extension`, so it is checked by
+  hand instead. It has been exercised in Microsoft Edge and works: invocation
+  loads a conversation, switching to another does not read it, and each tab
+  keeps its own state. The permission reduction itself is verifiable at any
+  time by reading `manifest.json`.
 - **A user who opts into "remember this key" accepts on-disk storage** of their
   API key in `chrome.storage.local`, readable by anyone with access to the
   Chrome profile. The default is not to do this, and the interface says so.

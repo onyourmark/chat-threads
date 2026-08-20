@@ -14,9 +14,10 @@ conversation content in anything you post publicly.
 | Area | Status |
 | --- | --- |
 | ChatGPT retrieval and the full reshaping workflow | **Passed** — tested live, see below |
-| OpenAI Find Topics | **Passed once** — a real API call produced usable topics |
-| Claude retrieval | **Not yet tested** against a live account |
-| The `activeTab` permission model | **Not yet tested** — changed after the live run |
+| Claude retrieval | **Passed** — tested live against a real signed-in conversation |
+| The `activeTab` permission model and tab binding | **Passed** — tested live in Microsoft Edge |
+| OpenAI Find Topics | **Passed** — real API calls produced usable topics, including on a Claude conversation |
+| Anthropic Find Topics | **Not yet tested** — needs a real Anthropic key |
 | Raw file-reference markers | **Fixed, not yet re-tested live** |
 
 ### What was tested live, and passed
@@ -45,25 +46,54 @@ signed-in ChatGPT account, on real conversations.
   continuation details, and answered a question about what the earlier
   conversation had covered.
 
+### Claude, tested and passed
+
+Chat Threads was run against a real signed-in Claude conversation. Claude was
+recognised, the conversation loaded, and the normal workflow ran on it.
+
+No API key was involved. Claude retrieval rides the Claude session the browser
+already holds, exactly as ChatGPT retrieval does.
+
+### The permission model and tab binding, tested and passed
+
+Verified by hand in Microsoft Edge, a Chromium browser:
+
+1. Chat Threads was invoked explicitly on Conversation A, which loaded.
+2. Switching to Conversation B did **not** load it.
+3. The side panel stayed visibly open — Chromium gives a window one side panel
+   — but showed the neutral "Ready when you are" state rather than reading the
+   new conversation.
+4. Returning to Conversation A preserved Conversation A's working state.
+5. Invoking Chat Threads on Conversation B loaded it independently.
+6. Returning to Conversation A still showed its own earlier state.
+
+State is isolated by tab and conversation, as intended. Note what is and is not
+being claimed: the panel does not disappear on a tab switch, and it is not
+meant to. What matters is that no conversation is read or replaced without an
+explicit invocation.
+
 ### What was tested live with reservations
 
 **OpenAI Find Topics.** With a real OpenAI API key, Find Topics completed and
-proposed several sensible topics with turn assignments, and Output produced a
-conversation per topic. One run was slow and appeared to hit a temporary retry
-or reload condition before succeeding. That is a single successful run, not
-evidence of reliability; treat latency and transient failures as open questions.
+proposed sensible topics with turn assignments, and Output produced a
+conversation per topic — including for a conversation that came from Claude,
+since the Find Topics provider is chosen independently of the source. One run
+was slow and appeared to hit a temporary retry or reload condition before
+succeeding, and on a very long conversation a request may take several minutes.
+Treat latency and transient failures as open questions.
 
 ### What this does not establish
 
-- Nothing about **Claude**. Claude retrieval has never run against a live
-  account.
-- Nothing about **other ChatGPT account types** — the run was one account, of
-  one type. Team, Enterprise and Edu accounts are untested.
-- Nothing about the **current permission model**. The live run used a build with
-  standing host access to the provider sites. That was replaced afterwards with
-  `activeTab` and on-demand injection, so steps 0 and 4 below need re-running.
-- Nothing about the **file-reference fix**, which was written in response to the
-  live run and is covered only by automated tests so far.
+- Nothing about **Anthropic Find Topics**, which still needs a real Anthropic
+  key. That key is only ever needed for Find Topics, never to read a
+  conversation.
+- Nothing about **other account types** on either provider — one account each,
+  of one type. Team, Enterprise and Edu are untested, as are Claude accounts
+  belonging to several organizations.
+- Nothing about **future versions** of either site, whose internals can change
+  without notice.
+- Nothing about the **file-reference fix**, which is covered only by automated
+  tests so far.
 
 ## Setup
 
@@ -369,6 +399,12 @@ If topics ever show up in B, stop and report it — that is the original bug.
 Only if you have a key you are willing to use. This sends conversation text to
 the provider you pick.
 
+The key is only ever for this step — reading a conversation from ChatGPT or
+Claude needs none. The provider you pick here is independent of where the
+conversation came from, so an OpenAI key analyses a Claude conversation
+perfectly well. **The Anthropic path is the one still untested**, so running
+this with an Anthropic key is the most valuable version of this step.
+
 1. In **Split**, press "Set up" under Find Topics.
 2. Choose a provider, paste a key, leave "remember" **off**.
 3. Read the notice. **Expect:** it names the host and the approximate size.
@@ -406,15 +442,14 @@ the provider you pick.
 If there is only time for some of this, do it in this order — highest
 uncertainty first:
 
-1. **Step 0 and step 1** — the permission model changed after the last live
-   run and has never been exercised in a browser.
-2. **Steps 4–7 on Claude** — Claude retrieval has never run against a live
-   account at all.
-3. **Step 8b** — the file-reference fix has only been tested against fixtures.
-4. **Step 4 on ChatGPT again** — confirming the permission change did not
-   disturb the retrieval path that previously worked.
-5. Everything else, which passed on ChatGPT before and is unlikely to have
-   regressed.
+1. **Step 8b** — the file-reference fix has only ever been tested against
+   fixtures, so it is now the least-verified part of the product.
+2. **Step 15 with an Anthropic key** — the Anthropic client has never made a
+   real request.
+3. **Steps 4–7 on an account of a different type**, or a Claude account in
+   several organizations. One account per provider has passed; nothing is known
+   about the rest.
+4. Everything else, which has passed live and is unlikely to have regressed.
 
 ## Reporting
 

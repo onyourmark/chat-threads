@@ -211,6 +211,13 @@ Pressing **Find Topics** sends the turns you have kept — shortened to the firs
 return a strict JSON structure: a list of topics, and one assignment per turn,
 with an "uncertain" flag it is told to set whenever it is unsure.
 
+**Which key you need, and when.** Reading a conversation never needs one:
+Chat Threads uses the ChatGPT or Claude session you are already signed in with.
+An API key is only for Find Topics, and only for the provider you pick there.
+The two choices are independent of where the conversation came from — you can
+analyse a Claude conversation with an OpenAI key, and an Anthropic key is
+required only if you choose Anthropic as the Find Topics provider.
+
 It is also told that **Why is AI so stupid?** already exists, so it keeps that
 topic rather than inventing its own version of it, and it is given rules for
 what goes in: swearing at the assistant, arguing with it about its own
@@ -239,20 +246,22 @@ Be aware of these before relying on it:
   Threads uses them from within the page, on your existing session. If either
   provider changes them, retrieval will break until the relevant adapter is
   updated. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
-- **ChatGPT is live-tested; Claude is not.** ChatGPT retrieval and the whole
-  reshaping workflow have been run against a real account on a 449-turn
-  conversation, and the resulting transcript was successfully continued in a
-  new ChatGPT chat. **Claude retrieval has never been run against a live
-  account.** Treat Claude support as implemented but unverified.
-- **One ChatGPT account, of one type.** Team, Enterprise and Edu accounts are
-  untested.
-- **AI topic proposals: one successful OpenAI call.** A real request produced
-  usable topics, but one run was slow and appeared to retry before succeeding.
-  There is no retry logic. The Anthropic client has not been used live.
-- **The permission model changed after that testing.** Chat Threads now uses
-  `activeTab` instead of standing site access. The retrieval mechanism is
-  unchanged, but the way the reader gets into the page has not been exercised
-  in a browser yet. See [docs/MANUAL-TESTING.md](docs/MANUAL-TESTING.md).
+- **Both providers are live-tested, on one account each.** ChatGPT retrieval and
+  the whole reshaping workflow ran against a real account on a 449-turn
+  conversation, and the transcript was successfully continued in a new ChatGPT
+  chat. Claude retrieval has since been run against a real signed-in Claude
+  conversation: Claude was recognised, the conversation loaded, and the normal
+  workflow worked. That is one account per provider — it does not establish
+  compatibility with every account type (Team, Enterprise and Edu are untested)
+  or with future versions of either site.
+- **AI topic proposals: OpenAI tested, Anthropic not.** A real OpenAI request
+  produced usable topics, including for a conversation that came from Claude.
+  One run was slow and appeared to retry before succeeding, and there is no
+  retry logic of our own. The Anthropic client is implemented and unit-tested
+  but has not been used with a real Anthropic key.
+- **Find Topics can be slow.** On a very long conversation the request may take
+  several minutes. The panel stays usable, and the result is applied to the
+  conversation it was started on even if you move around in the meantime.
 - **Attachments are referenced, not included.** A transcript notes that
   `spec.pdf` was attached, and an inline mention becomes
   `[Reference to attached file: spec.pdf]`; it does not contain the file.
@@ -260,8 +269,9 @@ Be aware of these before relying on it:
   text is.
 - **Model reasoning is deliberately not retrieved.** Extended thinking and
   chain-of-thought blocks are skipped by design.
-- **Working state is not persisted.** Closing the panel or reloading the
-  conversation discards your edits. Generate and copy before you leave.
+- **Working state is not persisted.** Each tab and conversation keeps its own
+  work, so moving between them is safe, but closing the panel or reloading a
+  conversation discards it. Generate and copy before you finish.
 - **Chromium only.** Chrome and Edge. No Firefox or Safari build.
 
 ## Architecture
@@ -311,13 +321,13 @@ as an official release is set out in
 
 Ideas, not commitments:
 
-- Live testing against a real Claude account, and against the current
-  `activeTab` permission model.
+- Live testing of Find Topics against the Anthropic provider, and against more
+  account types on both providers.
 - Still images of individual views, alongside the demo at the top.
 - Remembering the working state across a panel close.
 - Reordering turns within a generated conversation.
 - Search within a loaded conversation.
-- More providers, once the adapter contract has proven itself against two.
+- More providers — the adapter contract has now held up against two.
 
 Deliberately out of scope: a Chat Threads account, cloud storage, a backend,
 analytics, or turning this into a general-purpose AI chat client.
