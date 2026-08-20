@@ -322,6 +322,11 @@ Ideas, not commitments:
 Deliberately out of scope: a Chat Threads account, cloud storage, a backend,
 analytics, or turning this into a general-purpose AI chat client.
 
+## Patent Pending
+
+Certain technology implemented in Chat Threads is the subject of a U.S.
+provisional patent application filed August 20, 2026.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
