@@ -388,6 +388,199 @@ describe('a loaded conversation', () => {
     expect(text()).toContain('Conversation 1: Why is AI so stupid?');
   });
 
+  /** Put turns into the built-in topic using the per-turn dropdown. */
+  async function assignToBuiltIn(...turnIds: string[]) {
+    await act(async () => tab('Split').click());
+    for (const id of turnIds) {
+      const select = container.querySelector(
+        `#assign-${id}`,
+      ) as HTMLSelectElement;
+      await act(async () => {
+        select.value = 'built-in-venting';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+  }
+
+  const button = (label: string): HTMLButtonElement =>
+    Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === label,
+    ) as HTMLButtonElement;
+
+  const checkboxes = () =>
+    Array.from(
+      container.querySelectorAll('.review-item input[type="checkbox"]'),
+    ) as HTMLInputElement[];
+
+  it('shows a turn count and a Review action on every topic', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2', 'chatgpt-3');
+
+    expect(text()).toContain('2 turns');
+    expect(button('Review')).toBeDefined();
+    expect(button('Review').disabled).toBe(false);
+  });
+
+  it('does not offer Review for a topic with nothing in it', async () => {
+    await mount();
+    await act(async () => tab('Split').click());
+
+    expect(text()).toContain('0 turns');
+    expect(button('Review').disabled).toBe(true);
+  });
+
+  it('shows only the turns in the topic, all ticked to begin with', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2', 'chatgpt-3');
+    await act(async () => button('Review').click());
+
+    expect(text()).toContain('2 turns in this topic');
+    expect(checkboxes()).toHaveLength(2);
+    expect(checkboxes().every((c) => c.checked)).toBe(true);
+
+    // The turn text shown is the topic's, not the whole conversation's.
+    expect(text()).toContain('store its working copy');
+    expect(text()).not.toContain('Lisbon');
+  });
+
+  it('says the original conversation is never changed', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2');
+    await act(async () => button('Review').click());
+
+    expect(text()).toContain(
+      'removes the selected turns from your reshaped conversation',
+    );
+    expect(text()).toContain('original AI conversation is never changed');
+    expect(text()).toContain('Remove selected turns');
+  });
+
+  it('counts the selection and updates as turns are unticked', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2', 'chatgpt-3');
+    await act(async () => button('Review').click());
+
+    expect(text()).toContain('2 selected for removal');
+
+    await act(async () => checkboxes()[0]!.click());
+    expect(text()).toContain('1 selected for removal');
+    expect(checkboxes()[0]!.checked).toBe(false);
+    expect(checkboxes()[1]!.checked).toBe(true);
+  });
+
+  it('has Select all and Select none', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2', 'chatgpt-3');
+    await act(async () => button('Review').click());
+
+    await act(async () => button('Select none').click());
+    expect(text()).toContain('0 selected for removal');
+    expect(checkboxes().every((c) => !c.checked)).toBe(true);
+    expect(button('Remove selected turns').disabled).toBe(true);
+
+    await act(async () => button('Select all').click());
+    expect(text()).toContain('2 selected for removal');
+    expect(button('Remove selected turns').disabled).toBe(false);
+  });
+
+  it('removes the ticked turns and returns to the topic list', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2', 'chatgpt-3');
+    await act(async () => button('Review').click());
+
+    // Keep the first one.
+    await act(async () => checkboxes()[0]!.click());
+    await act(async () => button('Remove selected turns').click());
+
+    // Back on the topic list.
+    expect(text()).toContain('Add topic');
+    expect(container.querySelector('.review-list')).toBeNull();
+
+    // And the footer count reflects one turn gone.
+    expect(text()).toContain('7 of 8 kept');
+  });
+
+  it('shows the removal in Clean, as an ordinary exclusion', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2');
+    await act(async () => button('Review').click());
+    await act(async () => button('Remove selected turns').click());
+
+    await act(async () => tab('Clean').click());
+    expect(text()).toContain('7 of 8 turns will be included');
+    expect(container.querySelector('.turn.excluded')).not.toBeNull();
+    // The Clean view offers to put it straight back.
+    expect(text()).toContain('Include');
+  });
+
+  it('leaves the removed turn out of the Output preview', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2');
+    await act(async () => button('Review').click());
+    await act(async () => button('Remove selected turns').click());
+
+    await act(async () => tab('Output').click());
+    await act(async () => button('Preview').click());
+
+    const preview = container.querySelector('.preview')?.textContent ?? '';
+    expect(preview).not.toContain('store its working copy');
+    expect(preview).toContain('GitHub project noticed');
+  });
+
+  it('can be left without changing anything', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2', 'chatgpt-3');
+    await act(async () => button('Review').click());
+    await act(async () => button('← Back to topics').click());
+
+    expect(container.querySelector('.review-list')).toBeNull();
+    expect(text()).toContain('8 of 8 kept');
+  });
+
+  it('reviews a manually created topic through the same controls', async () => {
+    await mount();
+    await act(async () => tab('Split').click());
+    await act(async () => button('Add topic').click());
+
+    // Assign a turn to the new topic, which is second in the list.
+    const select = container.querySelector(
+      '#assign-chatgpt-4',
+    ) as HTMLSelectElement;
+    // The built-in topic already holds slot 1, so the new one is "2. Topic 2".
+    const topicOption = Array.from(select.options).find((o) =>
+      o.textContent?.startsWith('2. '),
+    )!;
+    await act(async () => {
+      select.value = topicOption.value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const reviewButtons = Array.from(
+      container.querySelectorAll('button'),
+    ).filter((b) => b.textContent?.trim() === 'Review') as HTMLButtonElement[];
+    await act(async () => reviewButtons[1]!.click());
+
+    expect(text()).toContain('1 turn in this topic');
+    expect(checkboxes()).toHaveLength(1);
+
+    await act(async () => button('Remove selected turns').click());
+    expect(text()).toContain('7 of 8 kept');
+  });
+
+  it('is undone by Reset changes', async () => {
+    await mount();
+    await assignToBuiltIn('chatgpt-2', 'chatgpt-3');
+    await act(async () => button('Review').click());
+    await act(async () => button('Remove selected turns').click());
+    expect(text()).toContain('6 of 8 kept');
+
+    await act(async () => button('Reset changes').click());
+    expect(text()).toContain('8 of 8 kept');
+
+    await act(async () => tab('Split').click());
+    expect(text()).toContain('0 turns');
+  });
+
   it('renders conversation text as text, never as markup', async () => {
     await mount();
 

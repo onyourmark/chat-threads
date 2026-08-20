@@ -12,6 +12,7 @@ import { SHARED, UNASSIGNED } from '../../model/types';
 import {
   addTopic,
   clearTopics,
+  countAssignedTo,
   removeTopic,
   renameTopic,
   setAssignment,
@@ -20,6 +21,7 @@ import {
 } from '../../operations/working';
 import { TurnCard } from './TurnCard';
 import { FindTopics } from './FindTopics';
+import { TopicReview } from './TopicReview';
 
 interface Props {
   state: WorkingState;
@@ -28,10 +30,26 @@ interface Props {
 
 export function SplitView({ state, onChange }: Props) {
   const [proposalNotes, setProposalNotes] = useState<string[] | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const hasProposal = state.topics.some((t) => t.fromProposal);
   const builtIn = state.topics.find((t) => t.builtIn);
   const hasBuiltIn = builtIn !== undefined;
   const builtInName = builtIn?.name ?? '';
+
+  // A topic the user removed while reviewing it should not leave the panel
+  // stranded in a review of nothing.
+  const reviewing = state.topics.find((t) => t.id === reviewingId);
+
+  if (reviewing) {
+    return (
+      <TopicReview
+        state={state}
+        topic={reviewing}
+        onChange={onChange}
+        onClose={() => setReviewingId(null)}
+      />
+    );
+  }
 
   return (
     <>
@@ -39,27 +57,45 @@ export function SplitView({ state, onChange }: Props) {
 
       {state.topics.length > 0 && (
         <div className="topic-list">
-          {state.topics.map((topic, i) => (
-            <div className="topic-row" key={topic.id}>
-              <span className="topic-index">{i + 1}</span>
-              <input
-                type="text"
-                value={topic.name}
-                aria-label={`Name of topic ${i + 1}`}
-                onChange={(e) =>
-                  onChange(renameTopic(state, topic.id, e.target.value))
-                }
-              />
-              <button
-                type="button"
-                className="btn small"
-                onClick={() => onChange(removeTopic(state, topic.id))}
-                aria-label={`Remove topic ${i + 1}`}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
+          {state.topics.map((topic, i) => {
+            const count = countAssignedTo(state, topic.id);
+            return (
+              <div className="topic-card" key={topic.id}>
+                <div className="topic-row">
+                  <span className="topic-index">{i + 1}</span>
+                  <input
+                    type="text"
+                    value={topic.name}
+                    aria-label={`Name of topic ${i + 1}`}
+                    onChange={(e) =>
+                      onChange(renameTopic(state, topic.id, e.target.value))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="btn small"
+                    onClick={() => onChange(removeTopic(state, topic.id))}
+                    aria-label={`Remove topic ${i + 1}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="topic-meta">
+                  <span>
+                    {count} turn{count === 1 ? '' : 's'}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn small"
+                    disabled={count === 0}
+                    onClick={() => setReviewingId(topic.id)}
+                  >
+                    Review
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

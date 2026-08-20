@@ -83,6 +83,51 @@ export function toggleIncluded(
 }
 
 /**
+ * Include or exclude several turns at once.
+ *
+ * This is what Topic Review commits when the user presses "Remove selected
+ * turns". It deliberately writes the same `included` flag the Clean view
+ * toggles, so a turn removed through a topic is excluded in exactly the sense
+ * the rest of the application already understands — there is no second,
+ * topic-shaped notion of removal to keep in step.
+ */
+export function setIncludedMany(
+  state: WorkingState,
+  turnIds: readonly string[],
+  included: boolean,
+): WorkingState {
+  const wanted = new Set(turnIds);
+  if (wanted.size === 0) return state;
+
+  let changed = false;
+  const turns = state.turns.map((t) => {
+    if (!wanted.has(t.id) || t.included === included) return t;
+    changed = true;
+    return { ...t, included };
+  });
+  return changed ? { ...state, turns } : state;
+}
+
+/**
+ * The turns a topic owns.
+ *
+ * Turns marked Shared are deliberately not here. They belong to every topic,
+ * so removing one while reviewing a single topic would quietly take it out of
+ * all the others too — Topic Review only offers what the topic actually owns.
+ */
+export function turnsAssignedTo(
+  state: WorkingState,
+  topicId: string,
+): Turn[] {
+  return state.turns.filter((t) => t.assignment === topicId);
+}
+
+/** How many turns each topic owns, for the topic list. */
+export function countAssignedTo(state: WorkingState, topicId: string): number {
+  return turnsAssignedTo(state, topicId).length;
+}
+
+/**
  * Edit the working copy of a turn.
  *
  * `edited` tracks whether the text still matches the original, so setting the
