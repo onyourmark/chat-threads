@@ -64,6 +64,7 @@ them.
 | Edit working copies | Change a turn's text; the original is kept so you can compare and restore |
 | Manual topic splitting | Any number of topics, editable names, per-turn assignment, plus Shared and Unassigned |
 | One topic made for you | "Why is AI so stupid?" — for turns spent cursing at, arguing with or venting at the AI. Rename it, remove it, or ignore it |
+| Review a topic and cut it | Open any topic on its own, tick the turns that really belong, and take them out of the cleaned conversation in one go |
 | Optional AI topic suggestions | Bring your own API key; nothing is sent until you press the button |
 | Honest about retrieval | Reports "complete", "unconfirmed" or "incomplete" and never passes off a partial transcript as a whole one |
 | Preview, copy, download | Markdown, plain text and JSON; the preview is the exact text that gets copied |
@@ -171,6 +172,33 @@ missing without your noticing.
 
 Generated conversations always keep the original chronological order, including
 shared turns, which slot back into the position they originally occupied.
+
+### Reviewing a topic, and cutting it out
+
+A topic is good for two different things, and you do not have to choose:
+
+- **pull this discussion out** into its own conversation, in Output; or
+- **take this discussion out** of the cleaned conversation.
+
+The second is what **Review** is for. Every topic has one — the built-in topic,
+topics you made yourself, and topics Find Topics proposed, all through the same
+controls.
+
+Review opens that topic on its own, showing only the turns assigned to it, with
+every turn ticked. Ticked means "remove this". That default matches the usual
+intention — *take this whole thread out* — and leaves you to untick the
+exceptions. There is a running count, **Select all** and **Select none**, and
+you can move a turn to a different topic from here if it was filed wrongly.
+
+**Remove selected turns** then excludes exactly the ticked ones. "Excluded" here
+means the same thing it means in the Clean view: it is the same switch, so a
+turn removed through a topic shows as excluded in Clean, can be put back there,
+and is restored by Reset Changes. There is no separate idea of deletion, and
+nothing is ever removed from your actual ChatGPT or Claude conversation.
+
+Turns marked **Shared** are deliberately not offered in Review. They belong to
+every topic, so removing one while looking at a single topic would quietly take
+it out of all the others.
 
 ### Find Topics
 

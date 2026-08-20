@@ -273,6 +273,28 @@ Use a conversation that genuinely covers two or three subjects.
    wrong — is *not* swept into it. This is the failure mode worth watching for;
    report it if you see it, with the turn redacted.
 
+## 12c. Reviewing a topic and cutting it out
+
+The main new workflow. Do it on a topic with a handful of turns in it.
+
+1. In **Split**, note that each topic shows a turn count and a **Review**
+   button, and that Review is disabled for a topic with nothing in it.
+2. Press **Review** on a topic with turns.
+3. **Expect:** only that topic's turns, each one ticked, a count reading
+   "N selected for removal", **Select all** / **Select none**, and wording
+   saying your original AI conversation is never changed.
+4. Untick one turn. **Expect:** the count drops by one immediately.
+5. Press **Remove selected turns**. **Expect:** you return to the topic list
+   and the footer count of kept turns drops by the number you removed.
+6. Open **Clean**. **Expect:** the removed turns appear greyed out and marked
+   excluded, exactly as if you had excluded them by hand, and the turn you
+   unticked is still included.
+7. Press **Include** on one of them in Clean, then open **Output**.
+   **Expect:** that turn is back in the cleaned transcript. This is the check
+   that matters: Review and Clean must be the same switch.
+8. Press **Reset changes**. **Expect:** every removed turn returns.
+9. Confirm the ChatGPT or Claude page itself is unchanged.
+
 ## 13. Copy and paste — the actual point
 
 1. Tick "Start with a note explaining this is an earlier conversation".

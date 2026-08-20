@@ -172,6 +172,20 @@ and prints working text verbatim; it never summarizes or rewrites. The preview
 and the clipboard call the same renderer with the same options, which is why
 what you read is what you paste.
 
+### Topic Review holds no state of its own
+
+Review is a screen, not a mode of the model. The ticks live in the component
+and disappear when it closes; the only thing that survives pressing the button
+is `setIncludedMany(..., false)`, which writes the same `included` flag the
+Clean view toggles.
+
+That was the whole design question, and answering it this way is what makes the
+rest fall out for free: a turn removed through a topic is excluded in exactly
+the sense everything else already understands, so Clean shows it, Output drops
+it, Reset restores it, and re-including it in Clean brings it back — with no
+reconciliation logic anywhere. A second, topic-shaped notion of removal would
+have needed all of that written and kept in step.
+
 ### The Shared rule
 
 A turn has exactly one assignment. `Shared` means "include this complete turn
