@@ -214,6 +214,42 @@ unproposed topics, duplicate or reserved ids, and control characters in names
 are all handled explicitly. Anything that fails wholesale is rejected without
 touching the conversation.
 
+## Sessions: one per tab and conversation
+
+Chrome gives a window a single side panel document, and it survives tab
+switches. That is what makes returning to a tab find its work still there — and
+it is also a trap. The panel cannot keep "the conversation" in one variable,
+because that variable belongs to whichever tab was looked at last.
+
+The first version did exactly that, and reacted to `tabs.onActivated` by
+loading. Switching tabs therefore replaced the conversation in the panel, and a
+Find Topics request that was still running wrote its answer into whatever was
+on screen when it returned.
+
+`sidepanel/sessions.ts` fixes it with a keyed store. A session is identified by
+tab id, provider and conversation id together, because both halves can change
+independently: the user can switch tabs, or navigate one tab from one
+conversation to another, and neither may carry work across.
+
+Two rules follow, and everything else is a consequence:
+
+1. **Loading is never a side effect.** `resolveTarget` decides what to show and
+   cannot load anything; retrieval happens only when the user clicks the
+   toolbar icon or presses a button that says it will. A tab switch changes
+   which session is displayed and nothing else.
+2. **Asynchronous results name their destination.** Anything slow captures the
+   session key *and* an epoch when it starts, and `applyToSession` drops it if
+   either has moved on. That is why Find Topics cannot land in the wrong
+   conversation: it is not aimed at "the current one", it is aimed at the one
+   that asked.
+
+The epoch exists for the case the key alone cannot catch — pressing Reload
+replaces the conversation under the same key, so an analysis describing the old
+one is stale even though the key still matches.
+
+Sessions live in memory only. Nothing is written to storage, which keeps the
+privacy statement true and means a panel reload starts clean.
+
 ## Layer 5 — the side panel
 
 React, because four views over one state object with inline editing is exactly

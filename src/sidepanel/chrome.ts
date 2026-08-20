@@ -31,8 +31,11 @@ export async function getActiveTab(): Promise<ActiveTabInfo> {
           i.provider === 'chatgpt' || i.provider === 'claude'
             ? i.provider
             : undefined,
+        conversationId:
+          typeof i.conversationId === 'string' ? i.conversationId : undefined,
         supported: i.supported === true,
         invoked: i.invoked === true,
+        invokedAt: typeof i.invokedAt === 'number' ? i.invokedAt : undefined,
         contentScriptReady: false,
       };
     }

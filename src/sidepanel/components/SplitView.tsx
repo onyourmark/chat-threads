@@ -22,14 +22,27 @@ import {
 import { TurnCard } from './TurnCard';
 import { FindTopics } from './FindTopics';
 import { TopicReview } from './TopicReview';
+import type { TopicProposal } from '../../ai/schema';
 
 interface Props {
   state: WorkingState;
   onChange: (next: WorkingState) => void;
+  /**
+   * Notes from the last accepted proposal. Held by the session rather than
+   * here, so they survive the user looking at another tab and coming back.
+   */
+  proposalNotes: readonly string[] | null;
+  onProposal: (proposal: TopicProposal) => void;
+  onClearNotes: () => void;
 }
 
-export function SplitView({ state, onChange }: Props) {
-  const [proposalNotes, setProposalNotes] = useState<string[] | null>(null);
+export function SplitView({
+  state,
+  onChange,
+  proposalNotes,
+  onProposal,
+  onClearNotes,
+}: Props) {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const hasProposal = state.topics.some((t) => t.fromProposal);
   const builtIn = state.topics.find((t) => t.builtIn);
@@ -127,7 +140,7 @@ export function SplitView({ state, onChange }: Props) {
             className="btn"
             onClick={() => {
               onChange(clearTopics(state));
-              setProposalNotes(null);
+              onClearNotes();
             }}
           >
             Clear all
@@ -135,13 +148,7 @@ export function SplitView({ state, onChange }: Props) {
         )}
       </div>
 
-      <FindTopics
-        state={state}
-        onProposal={(next, notes) => {
-          onChange(next);
-          setProposalNotes(notes);
-        }}
-      />
+      <FindTopics state={state} onProposal={onProposal} />
 
       {hasProposal && (
         <div className="notice">

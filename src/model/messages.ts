@@ -37,10 +37,22 @@ export interface ActiveTabInfo {
    */
   url?: string;
   provider?: ProviderId;
+  /**
+   * The provider's conversation id, worked out from the URL alone. Part of
+   * the session identity, so navigating a tab to a different conversation is
+   * recognised as different work rather than inherited.
+   */
+  conversationId?: string;
   /** True when the URL matches a supported provider host. */
   supported: boolean;
   /** True when the user invoked Chat Threads on this specific tab. */
   invoked: boolean;
+  /**
+   * When the user last clicked the toolbar icon on this tab. The panel loads
+   * a conversation only when this moves forward, which is what keeps loading
+   * an explicit act rather than a side effect of switching tabs.
+   */
+  invokedAt?: number;
   /** True when the content script answered a ping. */
   contentScriptReady: boolean;
 }

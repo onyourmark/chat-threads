@@ -1,14 +1,23 @@
 /**
  * The side panel.
  *
- * Holds one working conversation and the current view. The source
- * conversation returned by the adapter is kept frozen inside that working
- * state, so Reset always has something true to go back to.
+ * Chrome gives a window one side panel document, shared by every tab in it.
+ * The panel therefore cannot hold "the conversation" in a single variable —
+ * that variable would belong to whichever tab was looked at last, and
+ * switching tabs would silently hand one conversation's edits to another.
+ *
+ * Instead it keeps a session per tab-and-conversation (see `sessions.ts`) and
+ * only ever *displays* the one belonging to the active tab. Loading is never a
+ * side effect of switching tabs: it happens when the user clicks the toolbar
+ * icon, or presses a button that says it will.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { providerLabel } from '../adapters/registry';
 import type { AdapterFailure, RetrievalStatus } from '../model/types';
+import type { ActiveTabInfo } from '../model/messages';
+import type { TopicProposal } from '../ai/schema';
+import { applyProposal } from '../ai/apply';
 import {
   createWorkingState,
   hasChanges,
@@ -16,6 +25,17 @@ import {
   stats,
   type WorkingState,
 } from '../operations/working';
+import {
+  applyToSession,
+  dropTab,
+  putSession,
+  reloadSession,
+  resolveTarget,
+  sessionKey,
+  setProposalNotes,
+  updateSession,
+  type Sessions,
+} from './sessions';
 import {
   ensureContentScript,
   getActiveTab,
@@ -30,112 +50,209 @@ import { SplitView } from './components/SplitView';
 
 type View = 'prompts' | 'clean' | 'split' | 'output';
 
-type Phase =
+/** Transient states that are about the panel, not about a session. */
+type Busy =
   | { kind: 'checking' }
-  | { kind: 'unsupported' }
-  /**
-   * Chat Threads has not been given access to this tab. It holds no standing
-   * site access, so this is the normal resting state, not an error.
-   */
-  | { kind: 'needs-invocation' }
-  /** On a supported site, but no saved conversation is open. */
-  | { kind: 'no-conversation'; provider: string }
-  /** The tab would not accept the reader script; usually the grant lapsed. */
-  | { kind: 'not-ready' }
-  | { kind: 'loading' }
-  | { kind: 'failed'; failure: AdapterFailure }
-  | { kind: 'ready'; working: WorkingState };
+  | { kind: 'idle' }
+  | { kind: 'loading'; key: string }
+  | { kind: 'failed'; key: string; failure: AdapterFailure }
+  /** The tab would not accept the reader script; the grant has lapsed. */
+  | { kind: 'not-ready'; key: string };
 
 export function App() {
-  const [phase, setPhase] = useState<Phase>({ kind: 'checking' });
+  const [tab, setTab] = useState<ActiveTabInfo | null>(null);
+  const [sessions, setSessions] = useState<Sessions>(() => new Map());
+  const [busy, setBusy] = useState<Busy>({ kind: 'checking' });
   const [view, setView] = useState<View>('prompts');
 
-  const load = useCallback(async () => {
-    setPhase({ kind: 'checking' });
+  /**
+   * The invocation we have already acted on. A click on the toolbar icon moves
+   * the timestamp forward; anything else must not cause a load.
+   */
+  const handledInvocation = useRef(0);
 
-    const tab = await getActiveTab();
-
-    // No readable URL means no access to this tab, which is the default.
-    // Whether the tab is a provider page is not something we are entitled to
-    // know yet, so ask the user to invoke rather than guessing either way.
-    if (tab.tabId === undefined || (!tab.url && !tab.invoked)) {
-      setPhase({ kind: 'needs-invocation' });
-      return;
-    }
-
-    if (!tab.supported) {
-      setPhase({ kind: 'unsupported' });
-      return;
-    }
-
-    if (!(await ensureContentScript(tab.tabId))) {
-      setPhase({ kind: 'not-ready' });
-      return;
-    }
-
-    setPhase({ kind: 'loading' });
-    const result = await loadConversation(tab.tabId);
-
-    if (!result.ok) {
-      if (result.code === 'no-conversation') {
-        setPhase({
-          kind: 'no-conversation',
-          provider: providerLabel(result.adapter),
-        });
-        return;
-      }
-      setPhase({ kind: 'failed', failure: result });
-      return;
-    }
-
-    setPhase({ kind: 'ready', working: createWorkingState(result.conversation) });
+  const refreshTab = useCallback(async (): Promise<ActiveTabInfo> => {
+    const info = await getActiveTab();
+    setTab(info);
+    return info;
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  /**
+   * Retrieve the conversation in a tab and give it a session.
+   *
+   * Only ever called for an explicit user action. `existingKey` is set when
+   * the user asked to reload a session they already had, which bumps the
+   * session's epoch so anything already in flight is discarded.
+   */
+  const load = useCallback(
+    async (info: ActiveTabInfo, options: { reload?: boolean } = {}) => {
+      if (
+        info.tabId === undefined ||
+        !info.provider ||
+        !info.conversationId ||
+        !info.supported
+      ) {
+        setBusy({ kind: 'idle' });
+        return;
+      }
 
-  // Follow the user as they move between tabs and conversations.
+      const key = sessionKey(info.tabId, info.provider, info.conversationId);
+      setBusy({ kind: 'loading', key });
+
+      if (!(await ensureContentScript(info.tabId))) {
+        setBusy({ kind: 'not-ready', key });
+        return;
+      }
+
+      const result = await loadConversation(info.tabId);
+      if (!result.ok) {
+        setBusy({ kind: 'failed', key, failure: result });
+        return;
+      }
+
+      const working = createWorkingState(result.conversation);
+      setSessions((prev) =>
+        options.reload && prev.has(key)
+          ? reloadSession(prev, key, working)
+          : putSession(prev, {
+              key,
+              tabId: info.tabId as number,
+              provider: info.provider!,
+              conversationId: info.conversationId as string,
+              working,
+              epoch: 0,
+              proposalNotes: null,
+            }),
+      );
+      setBusy({ kind: 'idle' });
+    },
+    [],
+  );
+
+  /** Look at the active tab, and load only if the user just invoked us. */
+  const check = useCallback(async () => {
+    const info = await refreshTab();
+    if (info.invokedAt && info.invokedAt > handledInvocation.current) {
+      handledInvocation.current = info.invokedAt;
+      await load(info);
+      return;
+    }
+    setBusy({ kind: 'idle' });
+  }, [refreshTab, load]);
+
   useEffect(() => {
-    const onActivated = () => void load();
-    const onUpdated = (
-      _id: number,
-      change: chrome.tabs.TabChangeInfo,
-      tab: chrome.tabs.Tab,
-    ) => {
-      if (change.url && tab.active) void load();
+    void check();
+  }, [check]);
+
+  /**
+   * Watch the tabs, but only to keep track of *which* tab is in front.
+   *
+   * Deliberately no loading here. This is the bug that made switching tabs
+   * appear to move a conversation: reacting to a tab switch by loading meant
+   * the panel replaced whatever it was holding.
+   */
+  useEffect(() => {
+    const onActivated = () => void refreshTab();
+    const onUpdated = (_tabId: number, change: chrome.tabs.TabChangeInfo) => {
+      // A navigation changes which conversation a tab holds, so re-read it —
+      // but still do not load anything. `status` needs no permission, and
+      // `url` only arrives for tabs we already have access to.
+      if (change.url || change.status === 'complete') void refreshTab();
     };
+    const onRemoved = (tabId: number) =>
+      setSessions((prev) => dropTab(prev, tabId));
+
     chrome.tabs.onActivated.addListener(onActivated);
     chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.onRemoved.addListener(onRemoved);
     return () => {
       chrome.tabs.onActivated.removeListener(onActivated);
       chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onRemoved.removeListener(onRemoved);
     };
-  }, [load]);
+  }, [refreshTab]);
 
-  const working = phase.kind === 'ready' ? phase.working : null;
-  const update = (next: WorkingState) => setPhase({ kind: 'ready', working: next });
+  /**
+   * The toolbar icon is the explicit invocation, and the background records it
+   * in session storage. Noticing the change is how a click reaches a panel
+   * that is already open.
+   */
+  useEffect(() => {
+    const onChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ) => {
+      if (area !== 'session' || !changes['chatThreads.invokedTab']) return;
+      void check();
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, [check]);
+
+  const target = useMemo(() => resolveTarget(tab, sessions), [tab, sessions]);
+  const session =
+    target.kind === 'session' ? (sessions.get(target.key) ?? null) : null;
+
+  /** Edit the session being displayed. Bound to its key, not to "current". */
+  const changeSession = useCallback(
+    (key: string, next: WorkingState) =>
+      setSessions((prev) => updateSession(prev, key, () => next)),
+    [],
+  );
+
+  /**
+   * Apply a proposal that may have taken a long time to arrive.
+   *
+   * The key and epoch are the ones captured when the request started, so a
+   * result cannot land in a conversation the user has since moved to, nor in
+   * one that has been reloaded out from under it.
+   */
+  const acceptProposal = useCallback(
+    (key: string, epoch: number, proposal: TopicProposal) =>
+      setSessions((prev) =>
+        applyToSession(
+          prev,
+          key,
+          epoch,
+          (working) => applyProposal(working, proposal),
+          proposal.notes,
+        ),
+      ),
+    [],
+  );
+
+  const busyForTarget =
+    busy.kind !== 'idle' &&
+    busy.kind !== 'checking' &&
+    'key' in busy &&
+    target.kind !== 'session' &&
+    'key' in target &&
+    busy.key === target.key
+      ? busy
+      : null;
 
   return (
     <div className="app">
       <header className="header">
         <h1>Chat Threads</h1>
         <p className="tagline">Reshape your AI conversations.</p>
-        {working && (
+        {session && (
           <div className="meta">
-            <span className="pill">{providerLabel(working.source.provider)}</span>
             <span className="pill">
-              {working.source.turns.length} turns loaded
+              {providerLabel(session.working.source.provider)}
             </span>
-            <RetrievalPill status={working.source.retrieval} />
-            {working.source.title && (
-              <span className="title">{working.source.title}</span>
+            <span className="pill">
+              {session.working.source.turns.length} turns loaded
+            </span>
+            <RetrievalPill status={session.working.source.retrieval} />
+            {session.working.source.title && (
+              <span className="title">{session.working.source.title}</span>
             )}
           </div>
         )}
       </header>
 
-      {working && (
+      {session && (
         <nav className="tabs" role="tablist" aria-label="Chat Threads views">
           {(
             [
@@ -159,83 +276,177 @@ export function App() {
       )}
 
       <main className="scroll">
-        {phase.kind === 'checking' && <p className="empty">Checking this tab…</p>}
+        {busy.kind === 'checking' && <p className="empty">Checking this tab…</p>}
 
-        {phase.kind === 'loading' && (
+        {busy.kind === 'loading' && (
           <p className="empty">Loading the conversation…</p>
         )}
 
-        {phase.kind === 'unsupported' && (
-          <div className="empty">
-            <strong>Open a ChatGPT or Claude conversation</strong>
-            Chat Threads works on chatgpt.com and claude.ai. Open a conversation
-            there, then come back to this panel.
-          </div>
-        )}
-
-        {phase.kind === 'no-conversation' && (
-          <div className="empty">
-            <strong>No active conversation found</strong>
-            You are on {phase.provider}, but this page is not a saved
-            conversation yet. Open one from the sidebar, or send a first message
-            in a new chat.
-            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-              <button type="button" className="btn" onClick={() => void load()}>
-                Check again
-              </button>
-            </div>
-          </div>
-        )}
-
-        {phase.kind === 'needs-invocation' && <NeedsInvocation onRetry={load} />}
-
-        {phase.kind === 'not-ready' && (
-          <div className="empty">
-            <strong>Click the Chat Threads icon again</strong>
-            Permission to read this tab lapsed, which normally happens when the
-            page was reloaded. Click the Chat Threads icon in the toolbar to
-            give it access again.
-            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-              <button type="button" className="btn" onClick={() => void load()}>
-                Check again
-              </button>
-            </div>
-          </div>
-        )}
-
-        {phase.kind === 'failed' && <Failure failure={phase.failure} onRetry={load} />}
-
-        {working && (
+        {busy.kind !== 'loading' && busy.kind !== 'checking' && (
           <>
-            <RetrievalWarnings status={working.source.retrieval} />
-            {view === 'prompts' && <PromptsView state={working} />}
-            {view === 'clean' && <CleanView state={working} onChange={update} />}
-            {view === 'split' && <SplitView state={working} onChange={update} />}
-            {view === 'output' && <OutputView state={working} />}
+            {target.kind === 'needs-invocation' && (
+              <NeedsInvocation onRetry={() => void check()} />
+            )}
+
+            {target.kind === 'unsupported' && (
+              <div className="empty">
+                <strong>Open a ChatGPT or Claude conversation</strong>
+                Chat Threads works on chatgpt.com and claude.ai. Open a
+                conversation there, then click the Chat Threads icon.
+              </div>
+            )}
+
+            {target.kind === 'no-conversation' && (
+              <div className="empty">
+                <strong>No active conversation found</strong>
+                You are on {providerLabel(target.provider)}, but this page is
+                not a saved conversation yet. Open one from the sidebar, or send
+                a first message in a new chat.
+                <div
+                  className="row"
+                  style={{ justifyContent: 'center', marginTop: 12 }}
+                >
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => void check()}
+                  >
+                    Check again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {target.kind === 'offer-load' && busyForTarget?.kind === 'failed' && (
+              <Failure
+                failure={busyForTarget.failure}
+                onRetry={() => void refreshTab().then((i) => load(i))}
+              />
+            )}
+
+            {target.kind === 'offer-load' &&
+              busyForTarget?.kind === 'not-ready' && (
+                <div className="empty">
+                  <strong>Click the Chat Threads icon again</strong>
+                  Permission to read this tab lapsed, which normally happens
+                  when the page was reloaded. Click the Chat Threads icon in the
+                  toolbar to give it access again.
+                  <div
+                    className="row"
+                    style={{ justifyContent: 'center', marginTop: 12 }}
+                  >
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void check()}
+                    >
+                      Check again
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {target.kind === 'offer-load' && !busyForTarget && (
+              <OfferLoad
+                reason={target.reason}
+                onLoad={() => void refreshTab().then((i) => load(i))}
+              />
+            )}
+          </>
+        )}
+
+        {session && (
+          <>
+            <RetrievalWarnings status={session.working.source.retrieval} />
+            {view === 'prompts' && <PromptsView state={session.working} />}
+            {view === 'clean' && (
+              <CleanView
+                state={session.working}
+                onChange={(next) => changeSession(session.key, next)}
+              />
+            )}
+            {view === 'split' && (
+              <SplitView
+                state={session.working}
+                proposalNotes={session.proposalNotes}
+                onChange={(next) => changeSession(session.key, next)}
+                onProposal={(proposal) =>
+                  acceptProposal(session.key, session.epoch, proposal)
+                }
+                onClearNotes={() =>
+                  setSessions((prev) =>
+                    setProposalNotes(prev, session.key, null),
+                  )
+                }
+              />
+            )}
+            {view === 'output' && <OutputView state={session.working} />}
           </>
         )}
       </main>
 
-      {working && (
+      {session && (
         <footer className="footer-bar">
           <span>
-            {stats(working).included} of {working.turns.length} kept
-            {stats(working).edited > 0 && `, ${stats(working).edited} edited`}
+            {stats(session.working).included} of {session.working.turns.length}{' '}
+            kept
+            {stats(session.working).edited > 0 &&
+              `, ${stats(session.working).edited} edited`}
           </span>
           <span className="spacer" />
           <button
             type="button"
             className="btn small"
-            onClick={() => update(resetAll(working))}
-            disabled={!hasChanges(working)}
+            onClick={() =>
+              changeSession(session.key, resetAll(session.working))
+            }
+            disabled={!hasChanges(session.working)}
           >
             Reset changes
           </button>
-          <button type="button" className="btn small" onClick={() => void load()}>
+          <button
+            type="button"
+            className="btn small"
+            onClick={() =>
+              void refreshTab().then((i) => load(i, { reload: true }))
+            }
+          >
             Reload
           </button>
         </footer>
       )}
+    </div>
+  );
+}
+
+/**
+ * This tab holds a conversation we could load, and have not.
+ *
+ * Loading is a button rather than something that happens on arrival, so that
+ * moving between tabs never pulls a conversation into the panel by itself.
+ */
+function OfferLoad({
+  reason,
+  onLoad,
+}: {
+  reason: 'never-loaded' | 'changed-conversation';
+  onLoad: () => void;
+}) {
+  return (
+    <div className="empty">
+      <strong>
+        {reason === 'changed-conversation'
+          ? 'This tab is now showing a different conversation'
+          : 'Ready when you are'}
+      </strong>
+      {reason === 'changed-conversation'
+        ? 'Your work on the previous conversation is kept separately and is not carried over.'
+        : 'Chat Threads has not loaded this conversation yet.'}
+      <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+        <button type="button" className="btn primary" onClick={onLoad}>
+          Open Chat Threads for this conversation
+        </button>
+      </div>
     </div>
   );
 }

@@ -26,6 +26,15 @@ export interface ProviderAdapter {
   canHandle(url: string): boolean;
 
   /**
+   * The provider's conversation id, from the URL alone.
+   *
+   * Separate from `getConversationIdentity` because the side panel needs this
+   * without touching the page: it has no access to the document, and needs to
+   * tell one conversation from another to keep their sessions apart.
+   */
+  conversationIdFromUrl(url: string): string | undefined;
+
+  /**
    * Identify the conversation currently open, without retrieving it.
    * Returns `null` when the page is the provider's site but no conversation
    * is open (e.g. a brand-new empty chat).

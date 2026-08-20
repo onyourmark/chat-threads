@@ -8,7 +8,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { applyProposal, createAnalyzer } from '../../ai/apply';
+import { createAnalyzer } from '../../ai/apply';
+import type { TopicProposal } from '../../ai/schema';
 import { buildAnalysisInput, payloadSize } from '../../ai/prompt';
 import { DEFAULT_MODELS, PROVIDER_ORIGINS, type AnalyzerConfig } from '../../ai/types';
 import type { WorkingState } from '../../operations/working';
@@ -25,7 +26,16 @@ import {
 
 interface Props {
   state: WorkingState;
-  onProposal: (next: WorkingState, notes: string[]) => void;
+  /**
+   * Hand back the validated proposal rather than an updated conversation.
+   *
+   * The request can outlive the screen that started it — the user may switch
+   * tabs while it runs — so applying it here, to the conversation captured in
+   * this closure, would write an answer about one conversation into whichever
+   * one happened to be on display when the network replied. The panel owns
+   * that decision and knows which session asked.
+   */
+  onProposal: (proposal: TopicProposal) => void;
 }
 
 type Status =
@@ -88,7 +98,7 @@ export function FindTopics({ state, onProposal }: Props) {
       return;
     }
 
-    onProposal(applyProposal(state, result.proposal), result.proposal.notes);
+    onProposal(result.proposal);
     setStatus({ kind: 'done', topics: result.proposal.topics.length });
   };
 

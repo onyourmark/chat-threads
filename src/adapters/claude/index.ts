@@ -33,6 +33,10 @@ export class ClaudeAdapter implements ProviderAdapter {
     }
   }
 
+  conversationIdFromUrl(url: string): string | undefined {
+    return this.canHandle(url) ? conversationIdFromUrl(url) : undefined;
+  }
+
   getConversationIdentity(url: string): ConversationIdentity | null {
     if (!this.canHandle(url)) return null;
     const conversationId = conversationIdFromUrl(url);

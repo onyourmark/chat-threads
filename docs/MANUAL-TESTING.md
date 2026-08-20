@@ -295,6 +295,54 @@ The main new workflow. Do it on a topic with a handful of turns in it.
 8. Press **Reset changes**. **Expect:** every removed turn returns.
 9. Confirm the ChatGPT or Claude page itself is unchanged.
 
+## 12d. Two tabs at once
+
+This is the regression test for a bug found in live use, where switching tabs
+appeared to move a conversation into another one. Worth doing every time the
+panel changes.
+
+1. Open ChatGPT **Conversation A** in one tab and **Conversation B** in
+   another.
+2. Click the Chat Threads icon on **A**. It loads.
+3. Exclude a turn, so A has a visible change.
+4. Switch to the **B** tab *without* clicking the icon.
+   **Expect:** "Ready when you are", offering to open Chat Threads for this
+   conversation. It must **not** load B on its own, and must **not** show A's
+   turn count or A's edit.
+5. Switch back to **A**.
+   **Expect:** A is exactly as you left it, including the exclusion, and it was
+   not re-read.
+6. Now click the icon on **B**. It loads B.
+7. Exclude a different turn in B, then switch to A.
+   **Expect:** A still shows *its* exclusion, and B's is not there.
+8. Press **Reset changes** in one of them, switch to the other.
+   **Expect:** only the one you pressed it in was reset.
+
+### 12e. A slow Find Topics, with a tab switch
+
+Needs an API key, and is best on a long conversation so the request takes a
+while.
+
+1. On **Conversation A**, start **Find Topics**.
+2. While it is running, switch to the **B** tab and click the icon to load it.
+3. Wait for the request to finish.
+4. **Expect:** nothing appears in B. No new topics, no assignments.
+5. Switch back to **A**.
+   **Expect:** the proposed topics are here, in the conversation that asked
+   for them.
+
+If topics ever show up in B, stop and report it — that is the original bug.
+
+### 12f. Changing conversation in one tab
+
+1. Load Chat Threads on **Conversation A** and exclude a turn.
+2. In that same tab, click through to a **different** conversation.
+3. **Expect:** "This tab is now showing a different conversation", and an
+   explicit button to open Chat Threads for it. A's edits must not appear.
+4. Press the button. **Expect:** the new conversation loads, with no edits
+   carried over.
+5. Navigate the tab back to A. **Expect:** A's exclusion is still there.
+
 ## 13. Copy and paste — the actual point
 
 1. Tick "Start with a note explaining this is an earlier conversation".

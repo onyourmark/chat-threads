@@ -16,7 +16,7 @@
  * the grant, and the panel.
  */
 
-import { providerForUrl } from '../adapters/registry';
+import { identityFromUrl } from '../adapters/registry';
 import type { ActiveTabInfo } from '../model/messages';
 import { parseBackgroundRequest } from '../model/messages';
 
@@ -133,14 +133,16 @@ async function activeTabInfo(): Promise<ActiveTabInfo> {
     }
   }
 
-  const provider = url ? providerForUrl(url) : null;
+  const identity = url ? identityFromUrl(url) : null;
 
   return {
     tabId: active?.id,
     url,
-    provider: provider ?? undefined,
-    supported: provider !== null,
+    provider: identity?.provider,
+    conversationId: identity?.conversationId,
+    supported: identity !== null,
     invoked: invokedHere,
+    invokedAt: invokedHere ? invoked?.at : undefined,
     contentScriptReady: false,
   };
 }

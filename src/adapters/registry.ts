@@ -24,6 +24,21 @@ export function providerForUrl(url: string): ProviderId | null {
   return adapterForUrl(url)?.id ?? null;
 }
 
+/**
+ * Which provider and which conversation a URL refers to, without touching the
+ * page. Used by the side panel to keep one tab's work apart from another's.
+ */
+export function identityFromUrl(
+  url: string,
+): { provider: ProviderId; conversationId?: string } | null {
+  const adapter = adapterForUrl(url);
+  if (!adapter) return null;
+  return {
+    provider: adapter.id,
+    conversationId: adapter.conversationIdFromUrl(url),
+  };
+}
+
 /** Display name for a provider id, for use in the side panel. */
 export function providerLabel(id: ProviderId): string {
   return adapters.find((a) => a.id === id)?.label ?? id;

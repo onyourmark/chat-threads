@@ -11,20 +11,21 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../src/sidepanel/App';
-import { chatgptMixedTopics } from './fixtures/chatgpt';
-import { normalizeChatGptConversation } from '../src/adapters/chatgpt/normalize';
+import {
+  conversationResult,
+  createFakeBrowser,
+  type FakeBrowser,
+  type FakeTab,
+} from './fake-browser';
+
+const CONVERSATION_URL = 'https://chatgpt.com/c/conv-mixed';
+
+let browser: FakeBrowser;
 
 interface FakeOptions {
-  /** What the background reports about the active tab. */
-  tab?: {
-    tabId?: number;
-    url?: string;
-    provider?: string;
-    supported: boolean;
-    invoked?: boolean;
-  };
+  tab?: { tabId?: number; url?: string; supported?: boolean };
   /** Whether the content script answers a ping. */
   ready?: boolean;
   /** Whether injecting the reader script succeeds. */
@@ -33,97 +34,45 @@ interface FakeOptions {
   hasSiteAccess?: boolean;
   /** What `ct:load` returns. */
   loadResult?: unknown;
+  /** Leave false to model a tab the user has never invoked us on. */
+  invoked?: boolean;
 }
 
-/** Records what the panel asked the browser to do. */
-interface FakeCalls {
-  injections: number;
-  permissionRequests: number;
-}
-
-let calls: FakeCalls;
-
+/** One tab, already invoked, as if the user had just clicked the icon. */
 function installFakeChrome(options: FakeOptions) {
-  const {
-    tab = {
-      tabId: 1,
-      url: 'https://chatgpt.com/c/conv-mixed',
-      provider: 'chatgpt',
-      supported: true,
-      invoked: true,
-    },
-    ready = true,
-    canInject = true,
-    hasSiteAccess = false,
-    loadResult,
-  } = options;
-
-  calls = { injections: 0, permissionRequests: 0 };
-  let injected = ready;
-
-  const fake = {
-    runtime: {
-      id: 'test-extension',
-      lastError: undefined,
-      sendMessage: (_message: unknown, cb: (reply: unknown) => void) => {
-        cb({
-          type: 'ok:active-tab',
-          info: { invoked: false, ...tab, contentScriptReady: false },
-        });
-      },
-    },
-    tabs: {
-      sendMessage: (
-        _tabId: number,
-        message: { type: string },
-        cb: (reply: unknown) => void,
-      ) => {
-        if (message.type === 'ct:ping') {
-          cb(injected ? { type: 'ok:pong' } : undefined);
-          return;
-        }
-        if (message.type === 'ct:load') {
-          cb({ type: 'ok:conversation', result: loadResult });
-          return;
-        }
-        cb(undefined);
-      },
-      onActivated: { addListener: vi.fn(), removeListener: vi.fn() },
-      onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
-    },
-    scripting: {
-      executeScript: async () => {
-        calls.injections += 1;
-        if (!canInject) throw new Error('no access to this tab');
-        injected = true;
-        return [];
-      },
-    },
-    storage: {
-      local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
-      session: { get: async () => ({}), set: async () => {}, remove: async () => {} },
-    },
-    permissions: {
-      contains: async () => hasSiteAccess,
-      request: async () => {
-        calls.permissionRequests += 1;
-        return false;
-      },
-      remove: async () => true,
-    },
+  const tabId = options.tab?.tabId ?? 1;
+  const tab: FakeTab = {
+    tabId,
+    url: options.tab ? options.tab.url : CONVERSATION_URL,
+    ready: options.ready,
+    canInject: options.canInject,
+    loadResult: options.loadResult,
   };
 
-  (globalThis as unknown as { chrome: unknown }).chrome = fake;
+  browser = createFakeBrowser({
+    tabs: [tab],
+    activeTabId: tabId,
+    hasSiteAccess: options.hasSiteAccess,
+  });
+  (globalThis as unknown as { chrome: unknown }).chrome = browser.chrome;
+
+  // The panel opens because the user clicked the icon, unless a test is
+  // deliberately modelling a tab that was never invoked on.
+  if (options.invoked !== false && tab.url) browser.invoke(tabId);
 }
+
+/** Backwards-compatible accessor for the counters the old tests used. */
+const calls = {
+  get injections() {
+    return browser.injections;
+  },
+  get permissionRequests() {
+    return browser.permissionRequests;
+  },
+};
 
 function goodConversation() {
-  return {
-    ok: true,
-    conversation: normalizeChatGptConversation(chatgptMixedTopics, {
-      url: 'https://chatgpt.com/c/conv-mixed',
-      method: 'provider-api',
-    }),
-  };
+  return conversationResult('mixed', CONVERSATION_URL);
 }
 
 // Tells React that `act()` is available, so it does not warn on every render.
@@ -177,7 +126,7 @@ describe('the side panel mounts', () => {
 describe('states the user can end up in', () => {
   it('explains what to do on an unsupported site', async () => {
     installFakeChrome({
-      tab: { tabId: 1, url: 'https://example.com/', supported: false, invoked: true },
+      tab: { tabId: 1, url: 'https://example.com/' },
       loadResult: undefined,
     });
     await mount();
@@ -191,7 +140,7 @@ describe('states the user can end up in', () => {
     // No url and no invocation: the normal resting state, because Chat Threads
     // holds no standing access to any site.
     installFakeChrome({
-      tab: { tabId: 1, supported: false, invoked: false },
+      tab: { tabId: 1 }, invoked: false,
       loadResult: undefined,
     });
     await mount();
@@ -203,7 +152,7 @@ describe('states the user can end up in', () => {
 
   it('does not inject anything before it has been invoked', async () => {
     installFakeChrome({
-      tab: { tabId: 1, supported: false, invoked: false },
+      tab: { tabId: 1 }, invoked: false,
       loadResult: undefined,
     });
     await mount();
@@ -213,7 +162,7 @@ describe('states the user can end up in', () => {
 
   it('offers ongoing site access as an explicit opt-in', async () => {
     installFakeChrome({
-      tab: { tabId: 1, supported: false, invoked: false },
+      tab: { tabId: 1 }, invoked: false,
       hasSiteAccess: false,
       loadResult: undefined,
     });
@@ -231,7 +180,7 @@ describe('states the user can end up in', () => {
 
   it('does not offer site access again once it has been granted', async () => {
     installFakeChrome({
-      tab: { tabId: 1, supported: false, invoked: false },
+      tab: { tabId: 1 }, invoked: false,
       hasSiteAccess: true,
       loadResult: undefined,
     });
@@ -264,18 +213,14 @@ describe('states the user can end up in', () => {
   });
 
   it('says when the provider is recognized but no conversation is open', async () => {
-    installFakeChrome({
-      loadResult: {
-        ok: false,
-        adapter: 'claude',
-        code: 'no-conversation',
-        message: 'No active conversation found.',
-      },
-    });
+    // The URL alone settles this, so the page is never asked and the reader
+    // script is never injected into a page with nothing to read.
+    installFakeChrome({ tab: { tabId: 1, url: 'https://claude.ai/' } });
     await mount();
 
     expect(text()).toContain('No active conversation found');
     expect(text()).toContain('Claude');
+    expect(calls.injections).toBe(0);
   });
 
   it('names the adapter and the reason when retrieval fails', async () => {
