@@ -3,5 +3,8 @@
 # affects diffs and tooling.
 * text=auto eol=lf
 
-# Generated PNGs must never be line-ending "fixed".
+# Images must never be line-ending "fixed". Git's auto-detection would
+# almost certainly classify these as binary anyway, but saying so explicitly
+# means a demo GIF cannot be corrupted by a checkout on another platform.
 *.png binary
+*.gif binary

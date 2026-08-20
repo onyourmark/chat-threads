@@ -2,36 +2,47 @@
 
 **Reshape your AI conversations.**
 
-Long AI chats get messy. Chat Threads lets you keep the useful context while
-removing tangents, editing out material you would rather not carry forward, or
-splitting one sprawling conversation into several clean ones — then copy the
-result into a new ChatGPT or Claude chat.
+Long AI chats get messy. You start on one thing, drift into two others, paste
+something you would rather not keep — and somewhere in the middle you lose
+patience and tell the model exactly what you think of it. Chat Threads
+untangles one long AI conversation into separate topic conversations. Clean up
+your act on the way out: remove the rant, keep the useful context.
 
-Your original conversation is never touched.
+**Your original ChatGPT or Claude conversation is never changed.**
+
+![Four-step walkthrough of Chat Threads: a ChatGPT conversation mixing a book proposal, a browser extension and travel plans; the side panel finding those as three separate topics; the user reviewing one topic and choosing which turns to remove; and the finished clean conversations ready to copy.](docs/assets/chat-threads-demo.gif)
+
+**What the demo shows.** A long conversation holds several unrelated
+discussions. Chat Threads finds them. You review a topic and remove what you do
+not want. You copy out clean conversations and carry on. The conversation in
+the demo is invented for it — no real chat appears anywhere in this repository.
 
 ---
 
-## What it does
+## What you can do
 
 Chat Threads is a Chrome side panel that opens next to ChatGPT or Claude. It
 reads the conversation you are looking at, makes its own working copy, and lets
 you reshape that copy:
 
-- **Prompts** — read back only what *you* said, in order. The fastest way to
-  remember how a long conversation actually developed.
-- **Clean** — go through every turn and exclude the ones you do not want, or
-  edit a turn's text when most of it is worth keeping and one part is not.
-- **Split** — create topics, put each turn into one, and get a separate clean
-  conversation per topic.
-- **Output** — preview the result, copy it, or download it as Markdown, plain
-  text or JSON. Paste it into a new chat and carry on.
+- **See only your prompts** — read a long conversation back through your own
+  side of it, with the matching reply one click away.
+- **Remove what you do not want** — leave out whole turns, or edit a turn to
+  cut one paragraph and keep the rest.
+- **Find the separate discussions** inside one long thread. Do it by hand, or
+  press **Find Topics** and have a model you choose propose the split.
+- **Review and correct any suggestion** — a proposal fills in the same controls
+  you would use yourself, so you can rename a topic, move any turn, or throw
+  the whole thing away. Nothing is removed until you say so.
+- **Pull one topic out** into its own conversation, ready to continue
+  separately.
+- **Or cut one topic out** of the cleaned conversation — open it on its own,
+  untick anything worth keeping, and remove the rest in one go.
+- **Copy the result into a new ChatGPT or Claude chat** and pick up where you
+  left off, with the context you wanted and none of the rest.
 
-Everything above works with no account, no API key and no network requests.
-
-There is one optional extra: **Find Topics** asks a model of your choosing to
-suggest how the conversation divides up. It only runs when you press the
-button, and it fills in the same controls you would use by hand, so you can
-change anything it proposes.
+Everything except Find Topics works with no account, no API key, and no network
+requests at all.
 
 ## Why it exists
 
@@ -68,13 +79,6 @@ them.
 | Optional AI topic suggestions | Bring your own API key; nothing is sent until you press the button |
 | Honest about retrieval | Reports "complete", "unconfirmed" or "incomplete" and never passes off a partial transcript as a whole one |
 | Preview, copy, download | Markdown, plain text and JSON; the preview is the exact text that gets copied |
-
-## Screenshots
-
-Not yet included. The interface is four tabs — Prompts, Clean, Split, Output —
-in a standard Chrome side panel. Screenshots are held back deliberately: the
-obvious screenshot is of a real conversation, and that is exactly the thing not
-to publish. They will be added using a conversation created for the purpose.
 
 ## Privacy
 
@@ -309,7 +313,7 @@ Ideas, not commitments:
 
 - Live testing against a real Claude account, and against the current
   `activeTab` permission model.
-- Screenshots, taken from a conversation created for the purpose.
+- Still images of individual views, alongside the demo at the top.
 - Remembering the working state across a panel close.
 - Reordering turns within a generated conversation.
 - Search within a loaded conversation.
