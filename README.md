@@ -60,8 +60,23 @@ press the button.
 
 ## Installation
 
-Chat Threads is not in the Chrome Web Store yet, so installing it means
-building it once. It takes about a minute and needs Node.js installed.
+Chat Threads is not in the Chrome Web Store yet, so it installs as an unpacked
+extension. Either download the built one or build it yourself — the result is
+the same folder.
+
+### Download the built extension
+
+Take `chat-threads-1.0.0.zip` from the
+[latest release](https://github.com/onyourmark/chat-threads/releases/latest)
+and unzip it somewhere you can leave it. No Node.js, nothing to compile.
+
+The archive is reproducible: running `npm run package` on the tagged commit
+produces a byte-identical file, so you can check what you downloaded against
+the source it claims to come from. The SHA-256 is published with the release.
+
+### Or build it yourself
+
+About a minute, and needs Node.js.
 
 ```bash
 git clone https://github.com/onyourmark/chat-threads.git
@@ -71,11 +86,12 @@ npm run icons     # generates the extension icons
 npm run build     # writes the unpacked extension to dist/
 ```
 
-Then, in your browser:
+### Then load it
 
 1. Go to `chrome://extensions` — or `edge://extensions` in Microsoft Edge.
 2. Turn on **Developer mode** (top right in Chrome, left sidebar in Edge).
-3. Click **Load unpacked** and choose the `dist/` folder this build created.
+3. Click **Load unpacked** and choose the folder — the one you unzipped, or
+   the `dist/` folder the build created.
 4. Open a ChatGPT or Claude conversation.
 5. Click the Chat Threads toolbar icon. That one click both opens the side
    panel and gives Chat Threads permission to read that tab.
@@ -85,6 +101,10 @@ If you would rather not, the panel offers to let you grant ongoing access to
 chatgpt.com and claude.ai, which you can revoke at any time.
 
 Requires Chrome or Edge 116 or later (the side panel API).
+
+An unpacked extension does not update itself, and Chrome will remind you now
+and again that developer mode is on. Both stop being true once the Chrome Web
+Store listing is live.
 
 ## Private by design
 
