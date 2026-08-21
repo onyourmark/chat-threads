@@ -3,7 +3,7 @@
 Chat Threads is built so that this document can be short and specific. Where a
 claim is made here, the code that makes it true is named.
 
-**Last reviewed:** 19 August 2026, against version 1.0.0.
+**Last reviewed:** 20 August 2026, against version 1.0.0.
 
 ## The short version
 
@@ -25,6 +25,18 @@ Chat Threads reads:
 - attachment metadata: file name, and where available MIME type and size;
 - the conversation's title and id;
 - the URL of the tab, in order to tell which provider it is.
+
+On ChatGPT there is one further step. The ChatGPT web app authenticates its
+own requests with a short-lived access token, which it obtains from
+`/api/auth/session` on the page it is already running in. Chat Threads asks
+the same address for the same token, from inside that page, and attaches it to
+the single request that loads your conversation. The token is held in a local
+variable for the length of that call and then discarded: it is never written to
+storage, never passed between extension components, and never sent anywhere
+except back to ChatGPT (`getAccessToken` in `src/adapters/chatgpt/api.ts`).
+Claude needs no equivalent step — its requests are authenticated by the cookies
+the browser already sends. Chat Threads does not read cookies itself; it has no
+`cookies` permission.
 
 It does **not** read:
 
@@ -129,7 +141,7 @@ any site, and site access set to *on click*.
 | `activeTab` | Temporary access to the one tab you click the icon on, so the conversation can be read. Granted per invocation, and revoked when you navigate away |
 | `scripting` | To place the reader script into that tab at the moment you invoke it. Grants nothing on its own |
 
-Four further permissions are **optional** — declared so they can be asked for,
+Five further origins are **optional** — declared so they can be asked for,
 never held unless you say yes:
 
 | Optional permission | Asked for when |
