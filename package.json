@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "icons": "node scripts/make-icons.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "package": "node scripts/package-store.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

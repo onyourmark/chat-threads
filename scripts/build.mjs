@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
 const watch = process.argv.includes('--watch');
+/** Source maps are on for development and off for a store package. */
+const sourcemap = process.env.CT_SOURCEMAPS !== '0';
 
 async function main() {
   await rm(dist, { recursive: true, force: true });
@@ -36,7 +38,7 @@ async function main() {
     format: 'iife',
     platform: 'browser',
     target: 'chrome116',
-    sourcemap: true,
+    sourcemap,
     logLevel: 'info',
   };
 
