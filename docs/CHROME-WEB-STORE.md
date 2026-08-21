@@ -108,6 +108,8 @@ OPEN SOURCE
 The source is public and the privacy policy names the file behind each claim.
 https://github.com/onyourmark/chat-threads
 
+Chat Threads is an independent project. It is not affiliated with, endorsed by or connected to OpenAI or Anthropic. ChatGPT and Claude are the trademarks of their respective owners.
+
 Certain technology implemented in Chat Threads is the subject of a U.S. provisional patent application filed August 20, 2026.
 ```
 
