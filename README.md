@@ -280,10 +280,16 @@ separate topics.
 
 You do not have to do anything differently: press the button and wait. The
 panel says how many sections and roughly how many requests before you press it,
-shows which section it is on while it runs, and has a Stop button. The 866-turn
-example above comes to 15 sections and 31 requests. A conversation so large
-that even this would be unreasonable is refused before anything is sent, rather
-than turning into a hundred paid requests.
+shows which section it is on while it runs, and has a Stop button. A 876-turn
+conversation comes to 15 sections and 31 requests, with a stated ceiling of 36
+if a reply has to be asked for twice. A conversation so large that even this
+would be unreasonable is refused before anything is sent, rather than turning
+into a hundred paid requests.
+
+Each request carries the schema for its step, so the model is held to the exact
+shape the next step needs rather than merely to "some JSON". If a reply comes
+back in the wrong shape anyway, that one step is asked again — a few times per
+run at most, never a retry loop.
 
 **Which key you need, and when.** Reading a conversation never needs one:
 Chat Threads uses the ChatGPT or Claude session you are already signed in with.
@@ -371,13 +377,16 @@ Be aware of these before relying on it:
 - **Find Topics can be slow on a long conversation.** A conversation that has
   to go in sections makes one request after another, which can take several
   minutes and costs more than a single request would. The panel says how many
-  requests that will be before you start, shows progress, and can be stopped.
-  It stays usable throughout, and the result is applied to the conversation it
-  was started on even if you move around in the meantime.
-- **Sectioned analysis is tested synthetically, not against a live long chat.**
-  The 866-turn case is reproduced by a generated fixture and covered by tests
-  end to end; the multi-request path has not been re-run against a real
-  conversation of that size with a live key.
+  requests that will be before you start — and a ceiling, in case a reply has
+  to be asked for twice — shows progress, and can be stopped. It stays usable
+  throughout, and the result is applied to the conversation it was started on
+  even if you move around in the meantime.
+- **A complete sectioned run has not been verified live yet.** One real
+  876-turn run sectioned correctly and finished all fifteen discovery requests
+  in about 55 seconds, then failed at the step that reconciles them, because
+  the OpenAI client was not sending the JSON schema it had been given. That is
+  fixed and covered by tests, but the corrected path has not been run against a
+  real conversation again.
 - **Branch detection is one-directional, and not yet live-tested.** Chat
   Threads can find the branch point in a conversation that *was* branched from
   another; it cannot show you, from an original conversation, where branches

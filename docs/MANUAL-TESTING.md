@@ -17,7 +17,7 @@ conversation content in anything you post publicly.
 | Claude retrieval | **Passed** — tested live against a real signed-in conversation |
 | The `activeTab` permission model and tab binding | **Passed** — tested live in Microsoft Edge |
 | OpenAI Find Topics | **Passed** — real API calls produced usable topics, including on a Claude conversation |
-| Find Topics on a conversation too long for one request | **Not yet tested live** — covered end to end by tests against a generated 866-turn fixture; never run against a real conversation of that size with a key |
+| Find Topics on a conversation too long for one request | **Partly tested live** — a real 876-turn run sectioned correctly and completed all 15 discovery requests, then failed at the merge step on a schema-shape mismatch. That defect is fixed; the corrected path has not yet been re-run live |
 | Branch-point detection | **Not yet tested live** — the representation was read from ChatGPT's own web bundle and is covered by tests against synthetic payloads; never run against a real branched conversation |
 | Anthropic Find Topics | **Not yet tested** — needs a real Anthropic key |
 | Raw file-reference markers | **Fixed, not yet re-tested live** |
@@ -84,6 +84,31 @@ was slow and appeared to hit a temporary retry or reload condition before
 succeeding, and on a very long conversation a request may take several minutes.
 Treat latency and transient failures as open questions.
 
+**The first live sectioned run, 24 August 2026.** A real ChatGPT conversation
+of **876 turns** was analysed with OpenAI **gpt-4o-mini** through the normal
+panel, using the user's own key. What worked:
+
+- the long-conversation preflight chose sectioned mode on its own;
+- it divided the conversation into **15 sections**;
+- all **15 discovery requests** succeeded, in roughly **55 seconds**;
+- the progress line advanced through them correctly.
+
+It then failed at the merge step with:
+
+> The topics from each section could not be combined: The reply had no
+> "topics" list.
+
+No topics were applied, and fifteen paid requests were wasted. The cause was
+not the model: the OpenAI client accepted a schema for every stage and never
+put it on the wire, sending `response_format: { type: 'json_object' }` — JSON
+mode, which guarantees only that the reply parses. The merge step answered with
+valid JSON under a property name of its own choosing.
+
+Fixed two ways: the schema now goes on the wire as Structured Outputs
+(`response_format: { type: 'json_schema', json_schema: { name, strict, schema } }`),
+and a reply that is valid JSON of the wrong shape is asked once more, up to a
+small per-run budget. **The corrected path has not yet been re-run live.**
+
 **A very long conversation failed on 1.0.0.** A real ChatGPT conversation of
 866 turns — roughly 688,000 characters after per-turn shortening — was refused
 by OpenAI, because the whole thing went out as a single request. The panel
@@ -93,10 +118,10 @@ by tests but has not been repeated against the live conversation.
 
 ### What this does not establish
 
-- Nothing about **Find Topics on a conversation long enough to need sections**,
-  which is new in 1.0.1. The 866-turn case is reproduced by a generated fixture
-  and tested end to end, but no request has been made for a real conversation
-  of that size since the fix.
+- Nothing about **a complete sectioned Find Topics run**. The first live
+  attempt got as far as the merge step before failing on a defect that has
+  since been fixed; the corrected path is covered by tests but has not been
+  run against a real conversation again.
 - Nothing about **Anthropic Find Topics**, which still needs a real Anthropic
   key. That key is only ever needed for Find Topics, never to read a
   conversation.
@@ -457,8 +482,13 @@ the path added in 1.0.1 and the one with no live coverage yet.
    left unassigned. No turn should be missing from the conversation.
 7. Run it again and press **Stop** partway through. **Expect:** it stops, says
    "Stopped. Nothing was changed.", and the conversation is untouched.
-8. Check your provider's usage page. **Expect:** roughly the number of requests
-   the panel said, and no more.
+8. Check your provider's usage page. **Expect:** the number of requests the
+   panel said. If a reply came back in the wrong shape you may see one or two
+   more — the panel names that ceiling before you start, and shows "asking
+   again for the … step" when it happens.
+9. **Expect** no horizontal scrollbar in the panel at any point, and the tab
+   content to keep most of the panel's height even when a branch summary is
+   showing above it.
 
 ## 15b. Find where a chat was branched (no API key needed)
 

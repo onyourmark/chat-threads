@@ -110,14 +110,24 @@ request timeout beyond the browser's own.
 A later run, on an 866-turn conversation of roughly 688,000 characters, was
 rejected outright: the whole conversation went out as one request and the model
 had no room for it. Version 1.0.1 divides a conversation that size into
-sections and analyses it in several bounded requests instead. That path is
-covered end to end by tests against a generated fixture of the same size, but
-it has not yet been re-run against a real conversation with a live key — so
-treat "long conversations now work" as tested rather than field-proven. A
-sectioned run makes one request per section twice over plus one to reconcile
-them (31 requests for the 866-turn example), so it takes longer and costs more
-than a single request; the panel says how many before it starts and can be
-stopped.
+sections and analyses it in several bounded requests instead.
+
+That path has now been run live, once, on a real 876-turn conversation with
+gpt-4o-mini. It sectioned correctly, completed all fifteen discovery requests
+in about 55 seconds, and then failed at the merge step: the OpenAI client was
+discarding the JSON schema for every request and sending plain JSON mode, so
+the model answered with the right information under the wrong property name and
+fifteen paid requests were lost. Both halves of that are fixed — the schema now
+goes on the wire as Structured Outputs, and a reply that is valid JSON of the
+wrong shape is asked once more within a small per-run budget — but **the
+corrected path has not yet been re-run end to end against a real
+conversation**, so treat a complete sectioned run as tested rather than
+field-proven.
+
+A sectioned run makes one request per section twice over plus one to reconcile
+them (31 requests for a 15-section conversation), so it takes longer and costs
+more than a single request. The panel states both the normal count and a
+ceiling that includes the repair budget before it starts, and can be stopped.
 
 ### Anthropic topic proposals: not tested live
 

@@ -8,10 +8,11 @@ stays checkable against the code that was submitted.
 **Last reviewed:** 24 August 2026
 
 Version 1.0.0 is published and live. This document now describes the 1.0.1
-update. It fixes two things and adds one: Find Topics could not analyse a very
-long conversation and the error it showed pointed at the wrong cause, and there
-is now a branch-point indicator for ChatGPT conversations created with "Branch
-in new chat". No permission changes, no new hosts, and no change to what leaves
+update. It fixes three things and adds one: Find Topics could not analyse a
+very long conversation, the error it showed pointed at the wrong cause, the
+side panel's own layout let one summary crowd out the workspace — and there is
+now a branch-point indicator for ChatGPT conversations created with "Branch in
+new chat". No permission changes, no new hosts, and no change to what leaves
 the machine — branch detection is entirely local and needs no API key.
 
 Nothing here is a claim the code does not already support. Where a statement
@@ -34,8 +35,8 @@ nothing else — no source, no maps, no tests, no keys, no `node_modules`. The
 archive uses a fixed timestamp, so the same commit produces a byte-identical
 file and a submission can be checked against the source it claims to come from.
 
-Contents of the 1.0.1 package (339,094 bytes uncompressed, 97,566 bytes
-archived — 95 KB):
+Contents of the 1.0.1 package (345,554 bytes uncompressed, 99,549 bytes
+archived — 97 KB):
 
 | File | Bytes |
 | --- | --- |
@@ -43,15 +44,15 @@ archived — 95 KB):
 | `sidepanel.html` | 379 |
 | `background.js` | 47,635 |
 | `content.js` | 47,104 |
-| `assets/index.js` | 231,241 |
-| `assets/index.css` | 9,813 |
+| `assets/index.js` | 236,820 |
+| `assets/index.css` | 10,694 |
 | `icons/icon-16.png` | 149 |
 | `icons/icon-32.png` | 236 |
 | `icons/icon-48.png` | 335 |
 | `icons/icon-128.png` | 999 |
 
 SHA-256 of `chat-threads-1.0.1.zip`:
-`ab2a52b0087f3c32bb59ff8de7773320ea9dc0fe03f30657e8ef5d3a37838535`
+`5b2c6bc1027cfd5e6d0e13da5332d52e41f3d3d1e878ed4826c20cca3afdbf1f`
 
 The zip file is not committed: `.gitignore` excludes `*.zip`, because a build
 artifact that can be reproduced from source does not belong in history.
@@ -351,7 +352,7 @@ Run on 24 August 2026 against the commit that produced the 1.0.1 package.
 | --- | --- |
 | `npm run lint` | Clean |
 | `npm run typecheck` | Clean |
-| `npm test` | 460 tests in 21 files, all passing |
+| `npm test` | 503 tests in 24 files, all passing |
 | `npm run package` | 10 files, allow-list and forbid-list both satisfied |
 | Source maps in package | None; no `sourceMappingURL` in any shipped file |
 | Credential scan, working tree | Nothing found |
