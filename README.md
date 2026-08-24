@@ -172,6 +172,7 @@ table:
 | Asks before it reads anything | No standing site access; it can only read a tab you point it at with the toolbar icon |
 | Readable file references | ChatGPT's private "attached file" markers become `[Reference to attached file: notes.md]` rather than raw syntax |
 | Follows the branch you are on | Reconstructs the branch currently displayed, and says so when it cannot confirm which one that is |
+| Finds where a chat was branched | On a ChatGPT chat started with "Branch in new chat", shows the turn it branched from and jumps straight to it |
 | Never edits the original | Everything happens on a working copy the extension holds in memory |
 | Prompts-only view | User turns in order, with the matching reply one click away |
 | Exclude and restore | Leave a turn out of the result, put it back at any time |
@@ -310,6 +311,40 @@ dropdowns you use manually. There is no separate AI state — changing a dropdow
 simply overrides what the model said, and turns you have overridden are marked
 so you can see which choices were yours.
 
+### Find where a chat was branched
+
+ChatGPT lets you take a message in the middle of a conversation and start a new
+chat from it. Months and a few hundred turns later, that boundary is very hard
+to find again: it sits somewhere in the middle of a long scroll, and Ctrl-F
+cannot reach it because the marker is not text you ever typed.
+
+If a conversation was started that way, Chat Threads says so at the top of the
+panel:
+
+> **Branch point: Turn 184** — *Assistant: 1:1:1 by weight is a good place to
+> start.* — **Go to branch point**
+
+Pressing the button jumps to that turn and flashes it, and the turn carries a
+**Branch point** badge wherever it appears. When ChatGPT recorded which
+conversation the branch came from, there is also a link back to it.
+
+This reads ChatGPT's own record of the branch — the metadata it writes on the
+first message of the new chat — rather than searching the page for the
+"Branched from" wording, which can change or be translated, and which is not in
+the page at all until you scroll to it. It never guesses from the shape of the
+conversation: a regenerated answer and an edited prompt both fork ChatGPT's
+internal tree, and neither is reported as a branch.
+
+It runs locally, on the conversation Chat Threads has already loaded. No API
+key, no request, nothing sent anywhere.
+
+**What it cannot do.** ChatGPT records the branch only on the new chat, pointing
+back at the original — there is no field anywhere saying "this conversation has
+branches". So opening the *original* conversation will not show you where
+somebody branched out of it. Open the branched chat instead, which is where the
+record lives. Claude has no equivalent feature, and Chat Threads says so rather
+than reporting that a Claude chat has no branches.
+
 ## Current limitations
 
 
@@ -343,6 +378,13 @@ Be aware of these before relying on it:
   The 866-turn case is reproduced by a generated fixture and covered by tests
   end to end; the multi-request path has not been re-run against a real
   conversation of that size with a live key.
+- **Branch detection is one-directional, and not yet live-tested.** Chat
+  Threads can find the branch point in a conversation that *was* branched from
+  another; it cannot show you, from an original conversation, where branches
+  were taken out of it, because ChatGPT does not record that anywhere. The
+  detection is built from ChatGPT's own published web bundle and covered by
+  tests against synthetic payloads, but it has not yet been run against a real
+  branched conversation.
 - **Attachments are referenced, not included.** A transcript notes that
   `spec.pdf` was attached, and an inline mention becomes
   `[Reference to attached file: spec.pdf]`; it does not contain the file.

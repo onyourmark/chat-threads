@@ -214,6 +214,29 @@ Safari are out of scope for version 1.
 is no hard cap, but an extremely long transcript may be slow to render and
 awkward to paste into a chat with a context limit.
 
+**Branch detection only works from the branched side.** ChatGPT records a
+"Branch in new chat" on the conversation that was created, as four
+`branching_from_*` fields on that chat's first message, pointing back at the
+conversation and message it came from. Nothing is recorded on the other side:
+there is no field saying "this conversation has branches", no branch count and
+no list of child conversations. So Chat Threads can tell you where a branched
+conversation came from, and cannot tell you, from an original conversation,
+where somebody branched out of it. That is a limit of the provider data, not of
+the implementation.
+
+**Branch detection has not been run against a real branched conversation.** The
+representation was established by reading ChatGPT's own published web bundle,
+and is covered end to end by tests against synthetic payloads built to that
+shape. No request has yet been made for a real conversation created with
+"Branch in new chat". If ChatGPT renames those fields, detection goes quiet —
+it reports nothing rather than guessing — and `src/adapters/chatgpt/branch-metadata.ts`
+is the file to repair.
+
+**Claude has no equivalent.** Claude's conversation tree forks for edits and
+regenerations exactly as ChatGPT's does, but it has no "branch into a new chat"
+feature and records nothing linking one conversation to another. Chat Threads
+reports that as unsupported rather than as "no branches found".
+
 **Find Topics shortens what it sends.** Each turn is cut to its first 1,500
 characters before being sent for classification. This is good for privacy and
 cost, but a topic shift buried deep inside one very long turn may be missed.

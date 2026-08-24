@@ -18,6 +18,7 @@ conversation content in anything you post publicly.
 | The `activeTab` permission model and tab binding | **Passed** — tested live in Microsoft Edge |
 | OpenAI Find Topics | **Passed** — real API calls produced usable topics, including on a Claude conversation |
 | Find Topics on a conversation too long for one request | **Not yet tested live** — covered end to end by tests against a generated 866-turn fixture; never run against a real conversation of that size with a key |
+| Branch-point detection | **Not yet tested live** — the representation was read from ChatGPT's own web bundle and is covered by tests against synthetic payloads; never run against a real branched conversation |
 | Anthropic Find Topics | **Not yet tested** — needs a real Anthropic key |
 | Raw file-reference markers | **Fixed, not yet re-tested live** |
 
@@ -458,6 +459,53 @@ the path added in 1.0.1 and the one with no live coverage yet.
    "Stopped. Nothing was changed.", and the conversation is untouched.
 8. Check your provider's usage page. **Expect:** roughly the number of requests
    the panel said, and no more.
+
+## 15b. Find where a chat was branched (no API key needed)
+
+This is the 1.0.1 branch feature, and the one part of the release with no live
+coverage at all. It needs a ChatGPT conversation that was created with
+**Branch in new chat**, and nothing else — no key, no network.
+
+**Making one, if you do not already have a branched chat.** Open any ChatGPT
+conversation with a few turns in it. Hover a message, open the "..." menu (or
+the message's action row) and choose **Branch in new chat**. ChatGPT opens a new
+conversation that inherits everything up to that message. Send one message in
+it so the branch is recorded. That new chat is the one to test on.
+
+**The test.**
+
+1. Open the **branched** conversation on chatgpt.com.
+2. Click the Chat Threads toolbar icon.
+3. **Expect:** as soon as it loads, a strip under the tab bar reading
+   **"Branch point: Turn N"**, with a short quote of that turn and a
+   **Go to branch point** button. It should say which conversation it was
+   branched from, by title.
+4. Check N by hand: scroll the ChatGPT page to where its own "Branched from …"
+   line appears. The turn Chat Threads names should be the last turn *above*
+   that line — the last one inherited from the original.
+5. Press **Go to branch point**.
+   **Expect:** the panel switches to **Clean**, scrolls to that turn, and the
+   turn flashes briefly.
+6. **Expect:** that turn carries a **BRANCH POINT** badge. Scroll away and
+   press the button again — it should scroll back and flash again.
+7. Go to **Prompts** and **Split**. **Expect:** the same badge on the same turn
+   (in Prompts only if the branch point is one of your own messages).
+8. Open **any ordinary, never-branched conversation**.
+   **Expect:** no strip, no badge, nothing at all. This is as important as the
+   positive case.
+9. Open a conversation where you have **regenerated an answer** or **edited an
+   earlier prompt**. **Expect:** still nothing. Those fork ChatGPT's internal
+   tree but are not branches into a new chat, and must never be labelled as one.
+10. Open a **Claude** conversation. **Expect:** nothing. Claude has no such
+    feature.
+11. If the branched conversation is your own, press **Open original
+    conversation**. **Expect:** it opens the conversation the branch came from.
+
+**If step 3 shows nothing on a conversation you know was branched**, that is
+the interesting result and worth reporting: it most likely means ChatGPT has
+renamed the metadata. Nothing is broken — detection stays quiet rather than
+guessing — and `src/adapters/chatgpt/branch-metadata.ts` names the four fields
+to check.
 
 ## 16. Failure behaviour
 

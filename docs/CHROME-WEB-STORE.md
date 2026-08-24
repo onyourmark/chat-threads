@@ -8,11 +8,11 @@ stays checkable against the code that was submitted.
 **Last reviewed:** 24 August 2026
 
 Version 1.0.0 is published and live. This document now describes the 1.0.1
-update, which is a bug-fix release: Find Topics could not analyse a very long
-conversation, and the error it showed pointed at the wrong cause. Nothing about
-the permissions, the data handling or the listing text changes except where a
-sentence about Find Topics has been made accurate for conversations that need
-more than one request.
+update. It fixes two things and adds one: Find Topics could not analyse a very
+long conversation and the error it showed pointed at the wrong cause, and there
+is now a branch-point indicator for ChatGPT conversations created with "Branch
+in new chat". No permission changes, no new hosts, and no change to what leaves
+the machine — branch detection is entirely local and needs no API key.
 
 Nothing here is a claim the code does not already support. Where a statement
 could be doubted, the file that makes it true is named.
@@ -34,24 +34,24 @@ nothing else — no source, no maps, no tests, no keys, no `node_modules`. The
 archive uses a fixed timestamp, so the same commit produces a byte-identical
 file and a submission can be checked against the source it claims to come from.
 
-Contents of the 1.0.1 package (320,044 bytes uncompressed, 92,888 bytes
-archived — 91 KB):
+Contents of the 1.0.1 package (339,094 bytes uncompressed, 97,566 bytes
+archived — 95 KB):
 
 | File | Bytes |
 | --- | --- |
 | `manifest.json` | 1,203 |
 | `sidepanel.html` | 379 |
-| `background.js` | 41,520 |
-| `content.js` | 40,989 |
-| `assets/index.js` | 225,160 |
-| `assets/index.css` | 9,074 |
+| `background.js` | 47,635 |
+| `content.js` | 47,104 |
+| `assets/index.js` | 231,241 |
+| `assets/index.css` | 9,813 |
 | `icons/icon-16.png` | 149 |
 | `icons/icon-32.png` | 236 |
 | `icons/icon-48.png` | 335 |
 | `icons/icon-128.png` | 999 |
 
 SHA-256 of `chat-threads-1.0.1.zip`:
-`4ef6b180d3e3e5b3e3982ab81544fce17ee9a0d418bd9f7f2b35f9bd75e2be29`
+`ab2a52b0087f3c32bb59ff8de7773320ea9dc0fe03f30657e8ef5d3a37838535`
 
 The zip file is not committed: `.gitignore` excludes `*.zip`, because a build
 artifact that can be reproduced from source does not belong in history.
@@ -96,6 +96,9 @@ Assign each turn to a topic, so one conversation becomes several. Mark a turn Sh
 
 OUTPUT
 Copy the result to the clipboard, or download it as Markdown, plain text or JSON — either the whole cleaned conversation or one topic on its own. Paste it into a new chat and continue from there.
+
+FIND WHERE A CHAT WAS BRANCHED
+If you started a ChatGPT conversation with "Branch in new chat", Chat Threads shows which turn it branched from and takes you straight there, with a badge on the turn itself. Hundreds of turns later that boundary is very hard to find by hand, and the browser's own Find cannot reach it. This reads ChatGPT's own record of the branch, runs entirely on your machine, and needs no API key.
 
 YOUR ORIGINAL CONVERSATION IS NEVER CHANGED
 Chat Threads only ever reads from ChatGPT and Claude. The conversation it retrieves is frozen in memory the moment it loads, and every edit applies to a separate copy. Nothing is written back.
@@ -348,7 +351,7 @@ Run on 24 August 2026 against the commit that produced the 1.0.1 package.
 | --- | --- |
 | `npm run lint` | Clean |
 | `npm run typecheck` | Clean |
-| `npm test` | 424 tests in 19 files, all passing |
+| `npm test` | 460 tests in 21 files, all passing |
 | `npm run package` | 10 files, allow-list and forbid-list both satisfied |
 | Source maps in package | None; no `sourceMappingURL` in any shipped file |
 | Credential scan, working tree | Nothing found |

@@ -245,6 +245,41 @@ request too large, malformed request, server fault — with every
 provider-supplied string passed through `redactSecrets` first, because an error
 can quote the credential it just rejected.
 
+## Branch points, and why they are not read off the page
+
+ChatGPT's "Branch in new chat" starts a second conversation from a message in
+the middle of a first one. Finding that boundary again months later is the
+problem the feature solves, and the tempting implementation — search the
+rendered page for "Branched from" — is the wrong one three times over: the
+string is English, it can change, and on a long conversation it is not in the
+DOM at all until the user has scrolled to it.
+
+So detection reads what ChatGPT stores. The first message of a branched chat
+carries four metadata fields — `branching_from_conversation_id`,
+`branching_from_message_id`, `branching_from_conversation_title` and
+`branching_from_conversation_owner` — which is also what ChatGPT's own
+interface reads back to draw its "Branched from …" line.
+
+Two consequences shape the design:
+
+1. **It is one-directional.** Nothing is recorded on the conversation that was
+   branched *out of* — no branch count, no child list. The model therefore
+   distinguishes "looked and found nothing" from "this provider cannot say",
+   and `BranchInfo.status` carries that difference all the way to the panel
+   rather than flattening both into an empty list.
+2. **A fork in the tree is never a branch.** A conversation forks whenever an
+   answer is regenerated or a prompt is edited, and neither is this: a new-chat
+   branch lives in a *different conversation*, so it cannot appear as a fork in
+   this one's mapping at all. `adapters/chatgpt/branch-metadata.ts` keys on the
+   explicit fields and never on the shape of the tree, and the fixtures for a
+   regeneration and an edited prompt exist to keep it that way.
+
+Mapping a marker back to a turn is done during normalization, where the
+correspondence between provider nodes and emitted turns is still in hand. A
+marker sitting on a hidden provider node resolves to the visible turn before
+it, which is why the scan carries `lastVisibleSequenceByNodeId` rather than
+just an id lookup — and why a hidden node never becomes a turn of its own.
+
 ## Sessions: one per tab and conversation
 
 Chrome gives a window a single side panel document, and it survives tab

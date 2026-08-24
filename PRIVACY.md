@@ -127,6 +127,19 @@ Your conversation is then subject to that provider's own privacy policy, not
 this one. No telemetry, identifier, or usage data is attached to the request,
 and Chat Threads receives no copy of it.
 
+## Finding where a conversation was branched
+
+Chat Threads reads ChatGPT's own record of "Branch in new chat" so it can show
+you which turn a conversation was branched from. This is entirely local: it
+looks at the conversation payload already retrieved for the panel, and makes no
+request of its own. It needs no API key, works with Find Topics never set up,
+and sends nothing to OpenAI's model API, to Anthropic, or anywhere else.
+(`src/adapters/chatgpt/branch-metadata.ts`.)
+
+The only outbound thing it can produce is a link you choose to click: when
+ChatGPT recorded which conversation the branch came from, the panel offers to
+open that conversation on chatgpt.com. Nothing is fetched until you click it.
+
 ## Analytics and telemetry
 
 There are none. No analytics, no crash reporting, no usage counters, no remote
