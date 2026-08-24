@@ -201,7 +201,11 @@ export function downloadText(
   text: string,
   mimeType: string,
 ): void {
-  const blob = new Blob([text], { type: `${mimeType};charset=utf-8` });
+  downloadBlob(fileName, new Blob([text], { type: `${mimeType};charset=utf-8` }));
+}
+
+/** Hand the browser a file. Same path for text and for an archive. */
+export function downloadBlob(fileName: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -211,4 +215,23 @@ export function downloadText(
   a.remove();
   // Give the browser a moment to start reading the blob before releasing it.
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
+ * Save several files, one after another.
+ *
+ * Chrome treats a burst of downloads from one gesture as suspicious and will
+ * either ask the user to allow them or drop the later ones. Spacing them out
+ * is what makes fifteen files actually arrive; the zip is offered alongside
+ * precisely because this is the fragile route.
+ */
+export async function downloadMany(
+  files: readonly { name: string; text: string; mimeType: string }[],
+): Promise<void> {
+  for (const [i, file] of files.entries()) {
+    downloadText(file.name, file.text, file.mimeType);
+    if (i < files.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
 }

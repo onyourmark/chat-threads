@@ -20,7 +20,12 @@ import {
 } from '../../operations/transcript';
 import type { WorkingState } from '../../operations/working';
 import { isPristineDefaultTopic } from '../../model/default-topic';
-import { copyText, downloadText } from '../chrome';
+import { copyText, downloadBlob, downloadMany, downloadText } from '../chrome';
+import {
+  buildZip,
+  topicFileName,
+  uniqueFileNames,
+} from '../../operations/archive';
 
 interface Props {
   state: WorkingState;
@@ -31,6 +36,7 @@ export function OutputView({ state }: Props) {
   const [plainText, setPlainText] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [exported, setExported] = useState<string | null>(null);
 
   const options = useMemo(
     () => ({ includeHeader, includeAttachments: true }),
@@ -69,6 +75,52 @@ export function OutputView({ state }: Props) {
     setTimeout(() => setCopied(null), 2500);
   };
 
+  /**
+   * Every conversation as a file, named after its topic.
+   *
+   * The cleaned conversation is included: it is the one that has everything in
+   * it, and leaving it out of an "export everything" button would be odd.
+   */
+  const exportFiles = () => {
+    const extension = plainText ? 'txt' : 'md';
+    // The topic's own name, not the generated heading: the user asked for
+    // files called "Why is AI so stupid", not "Conversation 2: Why is AI so
+    // stupid". The cleaned conversation has no topic, so it keeps its title.
+    const names = uniqueFileNames(
+      conversations.map((c) => {
+        const topic = state.topics.find((t) => t.id === c.topicId);
+        return topicFileName(topic?.name ?? c.title, extension);
+      }),
+    );
+    return conversations.map((c, i) => ({
+      name: names[i]!,
+      text: render(c),
+      mimeType: plainText ? 'text/plain' : 'text/markdown',
+    }));
+  };
+
+  const exportZip = () => {
+    const files = exportFiles();
+    const base = topicFileName(state.source.title ?? 'Chat Threads', 'zip');
+    const bytes = buildZip(files);
+    downloadBlob(
+      base,
+      new Blob([bytes as unknown as BlobPart], { type: 'application/zip' }),
+    );
+    setExported(`Saved ${files.length} file${files.length === 1 ? '' : 's'} in ${base}.`);
+    setTimeout(() => setExported(null), 4000);
+  };
+
+  const exportSeparately = async () => {
+    const files = exportFiles();
+    setExported(`Saving ${files.length} files…`);
+    await downloadMany(files);
+    setExported(
+      `Saved ${files.length} file${files.length === 1 ? '' : 's'}. If fewer arrived, Chrome asked about multiple downloads — allow them, or use the .zip.`,
+    );
+    setTimeout(() => setExported(null), 8000);
+  };
+
   return (
     <>
       <div className="notice">
@@ -96,6 +148,41 @@ export function OutputView({ state }: Props) {
           <span>Plain text instead of Markdown</span>
         </label>
       </div>
+
+      {conversations.length > 1 && (
+        <div className="notice">
+          <div className="row">
+            <strong style={{ fontSize: 12 }}>Export everything</strong>
+            <span className="spacer" />
+            <span className="pill">
+              {conversations.length} file
+              {conversations.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <p className="hint" style={{ marginTop: 4 }}>
+            One file per conversation, named after its topic, as{' '}
+            {plainText ? 'plain text' : 'Markdown'}. Whatever is in Split right
+            now is what you get — including any assignment you changed by hand.
+          </p>
+          <div className="row" style={{ marginTop: 8 }}>
+            <button type="button" className="btn primary" onClick={exportZip}>
+              Download .zip
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void exportSeparately()}
+            >
+              Download separately
+            </button>
+          </div>
+          {exported && (
+            <div className="status ok" role="status">
+              {exported}
+            </div>
+          )}
+        </div>
+      )}
 
       {stranded.length > 0 && (
         <div className="notice warn">
