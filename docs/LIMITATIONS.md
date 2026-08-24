@@ -247,6 +247,17 @@ regenerations exactly as ChatGPT's does, but it has no "branch into a new chat"
 feature and records nothing linking one conversation to another. Chat Threads
 reports that as unsupported rather than as "no branches found".
 
+**A long conversation makes the panel work hard.** Several hundred turns is
+several hundred cards, each with a dropdown of every topic. Off-screen cards
+are left undrawn (`content-visibility`), and typing a topic name no longer
+rebuilds the list on every keystroke, but a conversation of a thousand turns is
+still a large document and the panel will feel heavier than on a short one.
+
+**A sectioned Find Topics run takes minutes, not seconds.** Fifteen sections is
+31 requests one after another; on the one measured run, fifteen of them took
+about 55 seconds, so a whole run is several minutes. The panel says how long to
+expect before it starts, and stays usable while it runs.
+
 **Find Topics shortens what it sends.** Each turn is cut to its first 1,500
 characters before being sent for classification. This is good for privacy and
 cost, but a topic shift buried deep inside one very long turn may be missed.

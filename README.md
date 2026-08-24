@@ -183,6 +183,9 @@ table:
 | Optional AI topic suggestions | Bring your own API key; nothing is sent until you press the button |
 | Honest about retrieval | Reports "complete", "unconfirmed" or "incomplete" and never passes off a partial transcript as a whole one |
 | Preview, copy, download | Markdown, plain text and JSON; the preview is the exact text that gets copied |
+| Export every topic at once | One file per topic, named after the topic, as Markdown or plain text — in a `.zip` or as separate downloads |
+| Ask for a topic by name | Add a topic, press Find Topics, and it looks for the turns that belong to it alongside the ones it finds itself |
+| Panel size control | Chrome's page zoom does not reach a side panel, so the panel has its own A− / A+ |
 
 ## Development
 
@@ -316,6 +319,50 @@ An accepted proposal writes into the same topic list and the same per-turn
 dropdowns you use manually. There is no separate AI state — changing a dropdown
 simply overrides what the model said, and turns you have overridden are marked
 so you can see which choices were yours.
+
+### Getting it all out at once
+
+**Output** has an **Export everything** button once there is more than one
+conversation to export. It writes one file per conversation — the cleaned one
+and each topic — named after the topic itself. The built-in topic comes out as
+`Why is AI so stupid.md`, with only the question mark removed, because a
+filesystem will not take it.
+
+Markdown by default, so headings and code blocks survive; tick **Plain text**
+for `.txt` instead. **Download .zip** gives you a single file; **Download
+separately** saves them one at a time, which Chrome may ask you to allow.
+
+Whatever is in Split at that moment is what you get, including any assignment
+you changed by hand after the suggestions arrived.
+
+### Asking for a topic you already have in mind
+
+Find Topics is not only "tell me what is in here". Add a topic, give it a name,
+and press the button: the model is told that topic already exists and is asked
+to find the turns that belong to it, alongside the ones it identifies itself.
+Clear the topics first and add just one, and you have asked a narrower
+question — *which parts of this are about that?*
+
+If nothing in the conversation fits, the topic stays empty. That is the honest
+answer, and it is the one the model is instructed to give rather than stretching
+unrelated turns to fill it.
+
+Your own topics survive a re-run. Topics from a previous suggestion do not —
+pressing the button again is how you ask for a different answer.
+
+### When a turn could go in two topics
+
+Every turn gets exactly one topic. When a turn could reasonably belong to two,
+the model is told to file it with the topic it *moves forward*, and to mark it
+**Unsure** — which shows as a badge in Split, so the turns worth a second look
+are the ones flagged. Change any of them with the dropdown; a turn you have
+moved yourself is marked **Your choice** and is never overwritten by a later
+suggestion.
+
+**Shared** is a different thing, and deliberately strict: it means the turn
+belongs with *every* topic — an opening instruction, say — and puts a copy in
+each. A turn that belongs to two topics out of fifteen is not shared; it goes
+in one, flagged.
 
 ### Find where a chat was branched
 

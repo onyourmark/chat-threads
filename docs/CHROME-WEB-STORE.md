@@ -7,13 +7,20 @@ stays checkable against the code that was submitted.
 **Prepared for:** version 1.0.1
 **Last reviewed:** 24 August 2026
 
-Version 1.0.0 is published and live. This document now describes the 1.0.1
-update. It fixes three things and adds one: Find Topics could not analyse a
-very long conversation, the error it showed pointed at the wrong cause, the
-side panel's own layout let one summary crowd out the workspace — and there is
-now a branch-point indicator for ChatGPT conversations created with "Branch in
-new chat". No permission changes, no new hosts, and no change to what leaves
-the machine — branch detection is entirely local and needs no API key.
+Version 1.0.0 is published and live. This document describes the 1.0.1 update.
+
+Fixes: Find Topics could not analyse a very long conversation; the error it
+showed pointed at the wrong cause; a topic the user added was ignored when they
+pressed the button again; and the panel's own layout let one summary crowd out
+the workspace and made a long conversation feel slow.
+
+Additions: a branch-point indicator for ChatGPT conversations created with
+"Branch in new chat", an export-everything button, and a size control for the
+panel.
+
+No permission changes, no new hosts, and no change to what leaves the machine.
+Branch detection, exporting and the size control are all entirely local and
+need no API key.
 
 Nothing here is a claim the code does not already support. Where a statement
 could be doubted, the file that makes it true is named.
@@ -35,8 +42,8 @@ nothing else — no source, no maps, no tests, no keys, no `node_modules`. The
 archive uses a fixed timestamp, so the same commit produces a byte-identical
 file and a submission can be checked against the source it claims to come from.
 
-Contents of the 1.0.1 package (345,554 bytes uncompressed, 99,549 bytes
-archived — 97 KB):
+Contents of the 1.0.1 package (352,656 bytes uncompressed, 101,844 bytes
+archived — 99 KB):
 
 | File | Bytes |
 | --- | --- |
@@ -44,15 +51,15 @@ archived — 97 KB):
 | `sidepanel.html` | 379 |
 | `background.js` | 47,635 |
 | `content.js` | 47,104 |
-| `assets/index.js` | 236,820 |
-| `assets/index.css` | 10,694 |
+| `assets/index.js` | 243,729 |
+| `assets/index.css` | 10,887 |
 | `icons/icon-16.png` | 149 |
 | `icons/icon-32.png` | 236 |
 | `icons/icon-48.png` | 335 |
 | `icons/icon-128.png` | 999 |
 
 SHA-256 of `chat-threads-1.0.1.zip`:
-`5b2c6bc1027cfd5e6d0e13da5332d52e41f3d3d1e878ed4826c20cca3afdbf1f`
+`906c3f1225841e360291bcd8d1a70e96c6a51bd630b6d840edd274c2faa89000`
 
 The zip file is not committed: `.gitignore` excludes `*.zip`, because a build
 artifact that can be reproduced from source does not belong in history.
@@ -96,7 +103,7 @@ SPLIT
 Assign each turn to a topic, so one conversation becomes several. Mark a turn Shared to put it in every topic; leave one Unassigned to drop it from all of them. Review a topic before you take it out.
 
 OUTPUT
-Copy the result to the clipboard, or download it as Markdown, plain text or JSON — either the whole cleaned conversation or one topic on its own. Paste it into a new chat and continue from there.
+Copy the result to the clipboard, or download it as Markdown, plain text or JSON — either the whole cleaned conversation or one topic on its own. Or export everything at once: one file per topic, named after the topic, as a zip or as separate downloads. Paste it into a new chat and continue from there.
 
 FIND WHERE A CHAT WAS BRANCHED
 If you started a ChatGPT conversation with "Branch in new chat", Chat Threads shows which turn it branched from and takes you straight there, with a badge on the turn itself. Hundreds of turns later that boundary is very hard to find by hand, and the browser's own Find cannot reach it. This reads ChatGPT's own record of the branch, runs entirely on your machine, and needs no API key.
@@ -352,7 +359,7 @@ Run on 24 August 2026 against the commit that produced the 1.0.1 package.
 | --- | --- |
 | `npm run lint` | Clean |
 | `npm run typecheck` | Clean |
-| `npm test` | 503 tests in 24 files, all passing |
+| `npm test` | 545 tests in 27 files, all passing |
 | `npm run package` | 10 files, allow-list and forbid-list both satisfied |
 | Source maps in package | None; no `sourceMappingURL` in any shipped file |
 | Credential scan, working tree | Nothing found |

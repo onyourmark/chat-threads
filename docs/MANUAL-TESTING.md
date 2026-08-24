@@ -537,6 +537,43 @@ renamed the metadata. Nothing is broken — detection stays quiet rather than
 guessing — and `src/adapters/chatgpt/branch-metadata.ts` names the four fields
 to check.
 
+### 15c. Asking for a topic by name
+
+1. On a conversation with suggestions already applied, press **Add topic** and
+   name it something the conversation really does discuss.
+2. Press **Find Topics** again.
+   **Expect:** your topic is still in the list afterwards, with its name, and
+   turns about it have been assigned to it. The previous suggestions are
+   replaced by new ones; yours is not.
+3. Press **Clear all**, add one topic, and run again.
+   **Expect:** the same — turns about it assigned to it, other topics found
+   alongside.
+4. Add a topic about something the conversation never mentions and run again.
+   **Expect:** the topic is still listed with **0 turns**. It must not have
+   been filled with loosely related turns.
+
+## 15d. Export everything
+
+1. On a conversation with several topics, open **Output**.
+2. **Expect:** an **Export everything** block saying how many files.
+3. Press **Download .zip**. **Expect:** one archive, named after the
+   conversation. Open it: one file per topic, each named after the topic —
+   `Why is AI so stupid.md` for the built-in one.
+4. Tick **Plain text instead of Markdown** and repeat. **Expect:** `.txt`.
+5. Press **Download separately**. **Expect:** every file arrives; Chrome may
+   ask you to allow multiple downloads, which the panel warns about.
+6. Change one turn's topic by hand in Split, then export again. **Expect:**
+   your change is in the exported files.
+
+## 15e. Panel size
+
+1. Look at the footer. **Expect:** **A−**, a percentage, and **A+**.
+2. Press **A+** twice. **Expect:** the whole panel gets bigger — text,
+   buttons and spacing together — and the percentage goes up.
+3. Close the panel and reopen it. **Expect:** the size you chose is still set.
+4. Zoom the ChatGPT page itself in and out. **Expect:** the panel is
+   unaffected, which is why it has its own control.
+
 ## 16. Failure behaviour
 
 1. Sign out of ChatGPT in another tab, then reload the panel on a conversation.
