@@ -75,6 +75,8 @@ function progressText(progress: AnalysisProgress | null): string {
       return 'Finding topics: reconciling topics across the conversation…';
     case 'classify':
       return `Finding topics: sorting section ${progress.section} of ${progress.sections}…`;
+    case 'repair':
+      return `Finding topics: asking again for the ${progress.where} step…`;
   }
 }
 
@@ -252,8 +254,10 @@ export function FindTopics({ state, onProposal }: Props) {
               This conversation is too long for one request, so it goes in{' '}
               {plan.sectionCount} sections — about {plan.requests} requests to
               the same host, one after another, with nothing else in between.
-              You still get one set of topics for the whole conversation. It
-              will take a few minutes, and you can stop it at any time.
+              If a reply comes back in the wrong shape that step is asked once
+              more, so at the very worst it is {plan.maxRequests}. You still
+              get one set of topics for the whole conversation. It will take a
+              few minutes, and you can stop it at any time.
             </p>
           )}
 

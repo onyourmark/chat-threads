@@ -68,6 +68,14 @@ export interface ModelRequest {
   user: string;
   /** JSON Schema for structured output, where the provider supports it. */
   schema?: unknown;
+  /**
+   * A stable name for that schema.
+   *
+   * OpenAI's Chat Completions API requires one alongside the schema, and it
+   * must match `[a-zA-Z0-9_-]{1,64}`. Set here rather than derived inside the
+   * provider so the name belongs to the stage it describes.
+   */
+  schemaName?: string;
   /** Upper bound on the reply, for providers that require one. */
   maxOutputTokens: number;
 }
@@ -87,7 +95,12 @@ export type AnalysisProgress =
   | { phase: 'single' }
   | { phase: 'discover'; section: number; sections: number }
   | { phase: 'merge' }
-  | { phase: 'classify'; section: number; sections: number };
+  | { phase: 'classify'; section: number; sections: number }
+  /**
+   * A reply came back in the wrong shape and is being asked for again. Rare,
+   * bounded, and worth showing rather than looking like a stall.
+   */
+  | { phase: 'repair'; where: string };
 
 export interface AnalyzeOptions {
   signal?: AbortSignal;

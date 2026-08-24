@@ -11,8 +11,7 @@
  * when `planAnalysis` says a single request would be too large — see `plan.ts`
  * for where that threshold comes from, and `stages.ts` for what each pass asks.
  *
- * Two properties are load-bearing throughout, and are what the tests in
- * `tests/ai-sections.test.ts` exist to hold down:
+ * Three properties are load-bearing throughout:
  *
  * - **Every retained turn is accounted for, once.** Sections are disjoint and
  *   contiguous, they carry the original sequence numbers unchanged, and the
@@ -22,6 +21,12 @@
  * - **Cancelling stops everything.** The signal is checked before every call
  *   and passed into every call, so a cancelled run makes no further requests
  *   and returns a cancellation rather than a half-finished proposal.
+ * - **One bad reply does not throw away the run.** The first live run over a
+ *   876-turn conversation completed fifteen section requests and then lost all
+ *   of them because the merge step answered with valid JSON under a property
+ *   name of its own choosing. Structured Outputs is the real fix; the bounded
+ *   repair below is the belt to its braces, and is capped hard enough that it
+ *   can never turn into a runaway bill.
  */
 
 import {
@@ -33,14 +38,17 @@ import {
 } from './schema';
 import { buildUserPrompt, reservedTopicIds, SYSTEM_PROMPT } from './prompt';
 import { planAnalysis, type AnalysisPlan, type PlanOptions } from './plan';
+import { describeShape, shapeSummary, type StageLocation } from './diagnostics';
 import {
   buildClassifyPrompt,
   buildDiscoveryPrompt,
   buildMergePrompt,
+  buildRepairPrompt,
   CLASSIFY_SYSTEM_PROMPT,
   DISCOVERY_SYSTEM_PROMPT,
   MAX_SECTION_TOPICS,
   MERGE_SYSTEM_PROMPT,
+  REPAIR_SYSTEM_PROMPT,
   SECTION_ASSIGNMENTS_SCHEMA,
   TOPIC_LIST_SCHEMA,
   validateSectionAssignments,
@@ -50,8 +58,10 @@ import {
 import { MAX_PROPOSED_TOPICS } from './schema';
 import type {
   AnalysisInput,
+  AnalysisStage,
   AnalyzeOptions,
   AnalyzerResult,
+  ModelRequest,
   TopicAnalyzer,
 } from './types';
 
@@ -66,12 +76,35 @@ const OUTPUT_TOKENS = {
   classify: 8_000,
 } as const;
 
+/**
+ * How many structural repairs one whole run may make.
+ *
+ * Small on purpose. A repair is for the odd reply that came back under the
+ * wrong property name; if several replies are shaped wrongly the model is not
+ * honouring the contract and paying to ask each one again is waste, not
+ * resilience. This is what keeps the worst case a number the panel can quote
+ * honestly before the user presses the button.
+ */
+export const MAX_REPAIRS_PER_RUN = 4;
+
+/**
+ * The largest previous reply worth sending back for reformatting.
+ *
+ * A repair rewrites the model's own answer, which for these stages is a short
+ * list. Something far larger is not a mis-named property, it is a different
+ * failure, and re-sending it would cost more than the section is worth.
+ */
+const MAX_REPAIR_INPUT_CHARS = 20_000;
+
 const CANCELLED: AnalyzerResult = {
   ok: false,
   errors: ['The request was cancelled.'],
 };
 
-export interface RunOptions extends AnalyzeOptions, PlanOptions {}
+export interface RunOptions extends AnalyzeOptions, PlanOptions {
+  /** Overridden by the tests; never by the UI. */
+  maxRepairs?: number;
+}
 
 /**
  * Analyse a conversation and return a proposal, or say why there isn't one.
@@ -100,12 +133,128 @@ export async function runTopicAnalysis(
     };
   }
 
+  const budget: RepairBudget = {
+    left: options.maxRepairs ?? MAX_REPAIRS_PER_RUN,
+  };
+
   if (plan.mode === 'single') {
     options.onProgress?.({ phase: 'single' });
-    return singlePass(analyzer, input, options);
+    return singlePass(analyzer, input, options, budget);
   }
 
-  return sectionedPasses(analyzer, input, plan, options);
+  return sectionedPasses(analyzer, input, plan, options, budget);
+}
+
+// ------------------------------------------------- asking, and checking ----
+
+/** How many repairs the whole run has left. Shared by every stage. */
+interface RepairBudget {
+  left: number;
+}
+
+type Checked<T> =
+  | { ok: true; value: T }
+  /** The request itself failed. Fatal wherever it happens. */
+  | { ok: false; fatal: true; errors: string[] }
+  /** A reply arrived and could not be used. The caller decides what that costs. */
+  | { ok: false; fatal: false; reason: string };
+
+interface AskOptions<T> {
+  analyzer: TopicAnalyzer;
+  request: ModelRequest;
+  /** The top-level array the stage requires, e.g. `topics`. */
+  expectedProperty: string;
+  /** Parse and check one reply. */
+  check: (raw: unknown) => { ok: true; value: T } | { ok: false; errors: string[] };
+  where: StageLocation;
+  options: RunOptions;
+  budget: RepairBudget;
+}
+
+/**
+ * Send one stage request, check the answer, and repair it once if the only
+ * thing wrong was its shape.
+ *
+ * The repair asks the model to reformat *its own previous reply*, so it costs
+ * one small request and sends no conversation text a second time. It is not
+ * attempted for a reply that was not JSON at all, for a transport failure, or
+ * once the run's repair budget is spent — each of those is a different problem
+ * and asking again would not fix any of them.
+ */
+async function ask<T>({
+  analyzer,
+  request,
+  expectedProperty,
+  check,
+  where,
+  options,
+  budget,
+}: AskOptions<T>): Promise<Checked<T>> {
+  if (options.signal?.aborted) {
+    return { ok: false, fatal: true, errors: ['The request was cancelled.'] };
+  }
+
+  const reply = await analyzer.complete(request, options);
+  if (!reply.ok) return { ok: false, fatal: true, errors: reply.errors };
+
+  const parsed = parseModelJson(reply.text);
+  if (parsed === null) {
+    return {
+      ok: false,
+      fatal: false,
+      reason: 'the reply was not usable JSON',
+    };
+  }
+
+  const first = check(parsed);
+  if (first.ok) return { ok: true, value: first.value };
+
+  // Structural, and repairable. Say what shape actually arrived — property
+  // names only, never values, so this is safe to show and to paste into a
+  // bug report.
+  const shape = describeShape(parsed, expectedProperty);
+  const reason = shapeSummary(shape, expectedProperty);
+
+  const repairable =
+    budget.left > 0 &&
+    !shape.expectedPresent &&
+    reply.text.length <= MAX_REPAIR_INPUT_CHARS &&
+    request.schema !== undefined;
+
+  if (!repairable || options.signal?.aborted) {
+    return { ok: false, fatal: false, reason };
+  }
+
+  budget.left -= 1;
+  options.onProgress?.({ phase: 'repair', where: where.stage });
+
+  const repaired = await analyzer.complete(
+    {
+      stage: request.stage,
+      system: REPAIR_SYSTEM_PROMPT,
+      user: buildRepairPrompt(request.schema, expectedProperty, reply.text),
+      schema: request.schema,
+      schemaName: request.schemaName,
+      maxOutputTokens: request.maxOutputTokens,
+    },
+    options,
+  );
+  if (!repaired.ok) {
+    return { ok: false, fatal: true, errors: repaired.errors };
+  }
+
+  const reparsed = parseModelJson(repaired.text);
+  if (reparsed === null) {
+    return { ok: false, fatal: false, reason };
+  }
+  const second = check(reparsed);
+  if (second.ok) return { ok: true, value: second.value };
+
+  return {
+    ok: false,
+    fatal: false,
+    reason: `${reason}, and the same after being asked again`,
+  };
 }
 
 // ------------------------------------------------------------ one pass -----
@@ -114,31 +263,36 @@ async function singlePass(
   analyzer: TopicAnalyzer,
   input: AnalysisInput,
   options: RunOptions,
+  budget: RepairBudget,
 ): Promise<AnalyzerResult> {
-  if (options.signal?.aborted) return CANCELLED;
+  const numbers = input.turns.map((t) => t.number);
+  const reserved = reservedTopicIds(input);
 
-  const reply = await analyzer.complete(
-    {
+  const result = await ask({
+    analyzer,
+    request: {
       stage: 'single',
       system: SYSTEM_PROMPT,
       user: buildUserPrompt(input),
       schema: TOPIC_PROPOSAL_SCHEMA,
+      schemaName: 'chat_threads_topic_proposal',
       maxOutputTokens: OUTPUT_TOKENS.single,
     },
+    expectedProperty: 'topics',
+    check: (raw) => {
+      const v = validateTopicProposal(raw, numbers, reserved);
+      return v.ok
+        ? ({ ok: true, value: v.proposal } as const)
+        : ({ ok: false, errors: v.errors } as const);
+    },
+    where: { stage: 'analysis' },
     options,
-  );
-  if (!reply.ok) return reply;
+    budget,
+  });
 
-  const parsed = parseModelJson(reply.text);
-  if (parsed === null) {
-    return { ok: false, errors: ['The model did not return usable JSON.'] };
-  }
-
-  return validateTopicProposal(
-    parsed,
-    input.turns.map((t) => t.number),
-    reservedTopicIds(input),
-  );
+  if (result.ok) return { ok: true, proposal: result.value };
+  if (result.fatal) return { ok: false, errors: result.errors };
+  return { ok: false, errors: [capitalise(result.reason)] };
 }
 
 // ------------------------------------------------------- several passes ----
@@ -148,6 +302,7 @@ async function sectionedPasses(
   input: AnalysisInput,
   plan: AnalysisPlan,
   options: RunOptions,
+  budget: RepairBudget,
 ): Promise<AnalyzerResult> {
   const sections = plan.sections;
   const count = sections.length;
@@ -168,31 +323,43 @@ async function sectionedPasses(
       sections: count,
     });
 
-    const reply = await analyzer.complete(
-      {
+    const result = await ask({
+      analyzer,
+      request: {
         stage: 'discover',
         system: DISCOVERY_SYSTEM_PROMPT,
         user: buildDiscoveryPrompt(input, section, count),
         schema: TOPIC_LIST_SCHEMA,
+        schemaName: 'chat_threads_section_topics',
         maxOutputTokens: OUTPUT_TOKENS.discover,
       },
+      expectedProperty: 'topics',
+      check: (raw) => {
+        const v = validateTopicList(raw, {
+          max: MAX_SECTION_TOPICS,
+          forbiddenIds: reserved,
+          allowEmpty: true,
+        });
+        return v.ok
+          ? ({ ok: true, value: v.topics } as const)
+          : ({ ok: false, errors: v.errors } as const);
+      },
+      where: { stage: 'reading', section: section.index, sections: count },
       options,
-    );
+      budget,
+    });
+
     // A rejected request will reject the next one too. Stop rather than spend
     // the user's remaining sections finding that out one at a time.
-    if (!reply.ok) return reply;
-
-    const checked = validateTopicList(parseModelJson(reply.text), {
-      max: MAX_SECTION_TOPICS,
-      forbiddenIds: reserved,
-      allowEmpty: true,
-    });
-    if (!checked.ok) {
+    if (!result.ok && result.fatal) {
+      return { ok: false, errors: result.errors };
+    }
+    if (!result.ok) {
       unreadable += 1;
       found.push({ section: section.index, topics: [] });
       continue;
     }
-    found.push({ section: section.index, topics: checked.topics });
+    found.push({ section: section.index, topics: result.value });
   }
 
   if (found.every((f) => f.topics.length === 0)) {
@@ -211,34 +378,45 @@ async function sectionedPasses(
   if (options.signal?.aborted) return CANCELLED;
   options.onProgress?.({ phase: 'merge' });
 
-  const mergeReply = await analyzer.complete(
-    {
+  const merged = await ask({
+    analyzer,
+    request: {
       stage: 'merge',
       system: MERGE_SYSTEM_PROMPT,
       user: buildMergePrompt(input, found, count),
       schema: TOPIC_LIST_SCHEMA,
+      schemaName: 'chat_threads_merged_topics',
       maxOutputTokens: OUTPUT_TOKENS.merge,
     },
+    expectedProperty: 'topics',
+    check: (raw) => {
+      const v = validateTopicList(raw, {
+        max: MAX_PROPOSED_TOPICS,
+        forbiddenIds: reserved,
+        // Only defensible when there is somewhere else for turns to go.
+        allowEmpty: reserved.length > 0,
+      });
+      return v.ok
+        ? ({ ok: true, value: v.topics } as const)
+        : ({ ok: false, errors: v.errors } as const);
+    },
+    where: { stage: 'reconciling' },
     options,
-  );
-  if (!mergeReply.ok) return mergeReply;
-
-  const merged = validateTopicList(parseModelJson(mergeReply.text), {
-    max: MAX_PROPOSED_TOPICS,
-    forbiddenIds: reserved,
-    // Only defensible when there is somewhere else for turns to go.
-    allowEmpty: reserved.length > 0,
+    budget,
   });
+
   if (!merged.ok) {
     return {
       ok: false,
       errors: [
-        `The topics from each section could not be combined: ${merged.errors[0] ?? 'the reply was unusable.'}`,
+        merged.fatal
+          ? merged.errors[0]!
+          : `The topics from each section could not be combined: ${merged.reason}. The work done on ${count} sections was not applied.`,
       ],
     };
   }
 
-  const canonical: ProposedTopic[] = merged.topics;
+  const canonical: ProposedTopic[] = merged.value;
   const allowedTopics = new Set<string>([
     ...canonical.map((t) => t.id),
     ...reserved,
@@ -256,32 +434,41 @@ async function sectionedPasses(
       sections: count,
     });
 
-    const reply = await analyzer.complete(
-      {
-        stage: 'classify',
-        system: CLASSIFY_SYSTEM_PROMPT,
-        user: buildClassifyPrompt(input, section, count, canonical),
-        schema: SECTION_ASSIGNMENTS_SCHEMA,
-        maxOutputTokens: OUTPUT_TOKENS.classify,
-      },
-      options,
-    );
-    if (!reply.ok) return reply;
-
     // This section's own turns, and nothing else. Background context shown for
     // continuity belongs to a neighbour and is refused here, so overlap can
     // never turn into the same turn being filed twice.
     const own = new Set(section.turns.map((t) => t.number));
-    const checked = validateSectionAssignments(
-      parseModelJson(reply.text),
-      own,
-      allowedTopics,
-    );
-    if (!checked.ok) {
+
+    const result = await ask({
+      analyzer,
+      request: {
+        stage: 'classify',
+        system: CLASSIFY_SYSTEM_PROMPT,
+        user: buildClassifyPrompt(input, section, count, canonical),
+        schema: SECTION_ASSIGNMENTS_SCHEMA,
+        schemaName: 'chat_threads_section_assignments',
+        maxOutputTokens: OUTPUT_TOKENS.classify,
+      },
+      expectedProperty: 'assignments',
+      check: (raw) => {
+        const v = validateSectionAssignments(raw, own, allowedTopics);
+        return v.ok
+          ? ({ ok: true, value: v.assignments } as const)
+          : ({ ok: false, errors: v.errors } as const);
+      },
+      where: { stage: 'sorting', section: section.index, sections: count },
+      options,
+      budget,
+    });
+
+    if (!result.ok && result.fatal) {
+      return { ok: false, errors: result.errors };
+    }
+    if (!result.ok) {
       unclassified += 1;
       continue;
     }
-    assignments.push(...checked.assignments);
+    assignments.push(...result.value);
   }
 
   if (unclassified > 0) {
@@ -306,3 +493,10 @@ async function sectionedPasses(
     proposal: { ...result.proposal, notes: [...notes, ...result.proposal.notes] },
   };
 }
+
+function capitalise(text: string): string {
+  return text.length === 0 ? text : text[0]!.toUpperCase() + text.slice(1);
+}
+
+/** Re-exported so the panel and the tests agree on what a stage is called. */
+export type { AnalysisStage };

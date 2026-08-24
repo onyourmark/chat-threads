@@ -36,6 +36,7 @@
  */
 
 import type { AnalysisInput, AnalysisTurn } from './types';
+import { MAX_REPAIRS_PER_RUN } from './run';
 import { SYSTEM_PROMPT } from './prompt';
 import { TOPIC_PROPOSAL_SCHEMA } from './schema';
 import {
@@ -108,8 +109,15 @@ export interface AnalysisPlan {
   chars: number;
   /** How many sections the conversation divides into. 1 when single. */
   sectionCount: number;
-  /** How many model calls the run will make. */
+  /** How many model calls the run will make when every reply is well formed. */
   requests: number;
+  /**
+   * The most it could make: every normal request, plus the run's whole repair
+   * budget, plus the one wasted request a model that cannot take a schema
+   * costs before the client stops offering it one. Quoted to the user so the
+   * number they agree to is a ceiling, not a hope.
+   */
+  maxRequests: number;
   /** Populated in `sections` mode only. */
   sections: AnalysisSection[];
 }
@@ -232,6 +240,7 @@ export function planAnalysis(
     chars,
     sectionCount: 1,
     requests: 1,
+    maxRequests: 1 + MAX_REPAIRS_PER_RUN + 1,
     sections: [],
   };
 
@@ -248,12 +257,14 @@ export function planAnalysis(
   if (packed.length <= 1) return single;
 
   const requests = packed.length * 2 + 1;
+  const maxRequests = requests + MAX_REPAIRS_PER_RUN + 1;
   if (packed.length > maxSections) {
     return {
       mode: 'too-large',
       chars,
       sectionCount: packed.length,
       requests,
+      maxRequests,
       sections: [],
     };
   }
@@ -270,6 +281,7 @@ export function planAnalysis(
     chars,
     sectionCount: sections.length,
     requests,
+    maxRequests,
     sections,
   };
 }

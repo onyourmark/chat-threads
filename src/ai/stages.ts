@@ -285,6 +285,44 @@ export function buildClassifyPrompt(
   return lines.join('\n');
 }
 
+/**
+ * Ask a model to put its own last answer into the required shape.
+ *
+ * Used at most once per request, and only when the reply was valid JSON whose
+ * structure did not match. It deliberately does not resend the conversation:
+ * the information is already in the model's previous reply, so the repair is a
+ * reformat, not a re-analysis. That keeps it cheap and keeps conversation text
+ * off the wire a second time.
+ */
+export function buildRepairPrompt(
+  schema: unknown,
+  expectedProperty: string,
+  previousReply: string,
+): string {
+  return [
+    'Your previous reply was valid JSON but did not match the required shape.',
+    '',
+    `It must be a JSON object with a top-level "${expectedProperty}" array. Do not rename that property. Do not wrap it in another object.`,
+    '',
+    'Required schema:',
+    JSON.stringify(schema),
+    '',
+    'Your previous reply:',
+    previousReply,
+    '',
+    `Return the same information as JSON matching the schema, with the array under "${expectedProperty}", and nothing else.`,
+  ].join('\n');
+}
+
+export const REPAIR_SYSTEM_PROMPT = [
+  'You convert a JSON value into the exact shape a schema requires.',
+  '',
+  'Rules:',
+  '- Keep the information that is already there. Do not invent entries and do not drop any.',
+  '- Use exactly the property names the schema gives.',
+  '- Reply with JSON matching the schema and nothing else.',
+].join('\n');
+
 // ---------------------------------------------------------- validators -----
 
 export type TopicListResult =

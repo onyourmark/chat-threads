@@ -217,6 +217,44 @@ export function describeProviderFault(
   }
 }
 
+/**
+ * Phrases a provider uses when the model cannot take a response format.
+ *
+ * Matched on the parameter name as well as a rejection word, so that an
+ * ordinary invalid-argument complaint about something else does not send the
+ * client into a pointless second attempt.
+ */
+const UNSUPPORTED_FORMAT = [
+  'response_format',
+  'json_schema',
+  'structured output',
+];
+
+/**
+ * True when the request was refused because *this model* cannot be given a
+ * schema — as opposed to any of the other reasons a 400 happens.
+ *
+ * This is the one signal that earns a retry. It is deliberately narrow: a
+ * wrong key, a spent quota, an oversized request and a server fault all fail
+ * the same way twice, and repeating them just spends the user's money.
+ */
+export function isUnsupportedResponseFormat(
+  status: number,
+  error: ProviderError,
+): boolean {
+  if (status !== 400) return false;
+  const text = `${error.code} ${error.type} ${error.message}`.toLowerCase();
+  if (!UNSUPPORTED_FORMAT.some((p) => text.includes(p))) return false;
+  return (
+    text.includes('not supported') ||
+    text.includes('unsupported') ||
+    text.includes('invalid') ||
+    text.includes('does not support') ||
+    error.code === 'unsupported_value' ||
+    error.code === 'invalid_value'
+  );
+}
+
 /** The whole path: status and body in, one displayable sentence out. */
 export function describeHttpFailure(
   provider: string,
