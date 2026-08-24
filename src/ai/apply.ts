@@ -9,6 +9,7 @@
 import type { Topic } from '../model/types';
 import { SHARED } from '../model/types';
 import { BUILT_IN_TOPIC_MODEL_ID } from '../model/default-topic';
+import { topicIdFromModelId } from './prompt';
 import { setAssignments, setTopics, type WorkingState } from '../operations/working';
 import { SHARED_TOPIC, type TopicProposal } from './schema';
 import type { AnalyzerConfig } from './types';
@@ -29,13 +30,21 @@ export function applyProposal(
 ): WorkingState {
   const idFor = (modelId: string) => `ai-${modelId}`;
 
-  // The built-in topic survives a proposal, keeping whatever name the user has
-  // given it. Without this, applying a proposal would silently replace it with
-  // the model's own version of the same idea — or drop it entirely.
-  const builtIn = state.topics.find((t) => t.builtIn);
+  // Topics the user is responsible for survive a proposal, keeping whatever
+  // names they gave them. Without this, applying a proposal would silently
+  // replace the built-in topic with the model's own version of the same idea,
+  // and would throw away a topic the user had added specifically so that the
+  // model would find turns for it.
+  //
+  // Topics from a previous proposal are not kept: re-running Find Topics is
+  // how you ask for a different answer, and keeping the old answer alongside
+  // the new one would just accumulate near-duplicates.
+  const kept = state.topics.filter((t) => t.builtIn || !t.fromProposal);
+  const builtIn = kept.find((t) => t.builtIn);
+  const keptById = new Map(kept.map((t) => [t.id, t]));
 
   const topics: Topic[] = [
-    ...(builtIn ? [builtIn] : []),
+    ...kept,
     ...proposal.topics.map((t) => ({
       id: idFor(t.id),
       name: t.name,
@@ -49,14 +58,19 @@ export function applyProposal(
     const turnId = bySequence.get(a.turn);
     if (!turnId) return [];
 
-    // The model refers to the built-in topic by a reserved id. If the user has
-    // removed that topic, there is nothing to assign to, so the turn is left
-    // where it was rather than the topic being resurrected behind their back.
+    // The model refers to a topic that already existed by a reserved id. If
+    // the user has removed that topic since the request went out, there is
+    // nothing to assign to, so the turn is left where it was rather than the
+    // topic being resurrected behind their back.
     if (a.topic === BUILT_IN_TOPIC_MODEL_ID) {
       if (!builtIn) return [];
-      return [
-        { turnId, assignment: builtIn.id, uncertain: a.uncertain },
-      ];
+      return [{ turnId, assignment: builtIn.id, uncertain: a.uncertain }];
+    }
+    const keptId = topicIdFromModelId(a.topic);
+    if (keptId !== null) {
+      const topic = keptById.get(keptId);
+      if (!topic) return [];
+      return [{ turnId, assignment: topic.id, uncertain: a.uncertain }];
     }
 
     return [

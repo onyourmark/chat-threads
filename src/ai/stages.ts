@@ -33,6 +33,7 @@ import {
   type ProposedTopic,
 } from './schema';
 import {
+  NAMED_TOPIC_RULES,
   renderContextTurns,
   renderTurns,
 } from './prompt';
@@ -152,6 +153,7 @@ export const CLASSIFY_SYSTEM_PROMPT = [
   '- Assign every turn in this section to exactly one topic id, or to "shared".',
   '- Use "shared" only for turns that genuinely belong with every topic, such as an opening greeting or a general instruction that applies throughout.',
   '- Keep a question and its answer in the same topic.',
+  '- When a turn could belong to two topics, put it with the one it moves forward, and set "uncertain" to true. Do not use "shared" for a turn that belongs to two topics out of fifteen — "shared" means it belongs with all of them.',
   '- Turns marked "context only" are shown as background. Do not assign them.',
   '- Set "uncertain" to true whenever you are not confident, rather than guessing quietly.',
   '- Do not rewrite, summarise, translate, or comment on the conversation. Only classify it.',
@@ -164,6 +166,41 @@ function titleLines(input: AnalysisInput): string[] {
 
 function hasBuiltIn(input: AnalysisInput): boolean {
   return input.existingTopics.some((t) => t.id === BUILT_IN_TOPIC_MODEL_ID);
+}
+
+/** Topics the person named themselves, as opposed to the built-in one. */
+function namedTopics(input: AnalysisInput) {
+  return input.existingTopics.filter((t) => t.id !== BUILT_IN_TOPIC_MODEL_ID);
+}
+
+/**
+ * Tell a stage that some topics are already decided.
+ *
+ * Discovery and merge are both asked for *new* topics, so an existing one must
+ * be kept out of their lists — but a topic the user named still has to be
+ * mentioned, or the merge step will happily invent a synonym for it and the
+ * final pass will have two names for one subject.
+ */
+function reservedTopicLines(input: AnalysisInput): string[] {
+  const lines: string[] = [];
+  if (hasBuiltIn(input)) {
+    lines.push(
+      `A topic with the id "${BUILT_IN_TOPIC_MODEL_ID}" already exists for turns spent cursing at, arguing with, or venting at the assistant. It is handled separately — do not list it, and do not name a topic of your own for it.`,
+      '',
+    );
+  }
+  const named = namedTopics(input);
+  if (named.length > 0) {
+    lines.push(
+      'These topics were named by the person before they asked you. They already exist and are handled separately: do not list them, and do not name a topic of your own that means the same thing.',
+    );
+    for (const topic of named) {
+      const description = topic.description ? ` — ${topic.description}` : '';
+      lines.push(`- ${topic.name}${description}`);
+    }
+    lines.push('');
+  }
+  return lines;
 }
 
 /** Pass 1: what is this section about? */
@@ -181,12 +218,7 @@ export function buildDiscoveryPrompt(
     '',
   );
 
-  if (hasBuiltIn(input)) {
-    lines.push(
-      `A topic with the id "${BUILT_IN_TOPIC_MODEL_ID}" already exists for turns spent cursing at, arguing with, or venting at the assistant. It is handled separately — do not list it, and do not name a topic of your own for it.`,
-      '',
-    );
-  }
+  lines.push(...reservedTopicLines(input));
 
   lines.push('Here are the turns in this section.', '');
   const context = renderContextTurns(section.context);
@@ -217,12 +249,7 @@ export function buildMergePrompt(
     '',
   );
 
-  if (hasBuiltIn(input)) {
-    lines.push(
-      `A topic with the id "${BUILT_IN_TOPIC_MODEL_ID}" already exists for turns spent cursing at, arguing with, or venting at the assistant. It is reserved — do not include it in your list, and do not merge anything into it.`,
-      '',
-    );
-  }
+  lines.push(...reservedTopicLines(input));
 
   for (const entry of found) {
     lines.push(`Section ${entry.section}:`);
@@ -272,6 +299,9 @@ export function buildClassifyPrompt(
 
   if (hasBuiltIn(input)) {
     lines.push(BUILT_IN_TOPIC_RULES, '');
+  }
+  if (namedTopics(input).length > 0) {
+    lines.push(NAMED_TOPIC_RULES, '');
   }
 
   lines.push(

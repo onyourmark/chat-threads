@@ -53,13 +53,17 @@ export function buildAnalysisInput(
     });
 
   // Topics that already exist are described to the model so it keeps them
-  // instead of inventing a near-duplicate. Only the built-in topic gets a
-  // reserved id; the user's own topics are theirs to organise, and re-running
-  // an analysis is allowed to reorganise them.
+  // instead of inventing a near-duplicate, and so it can put turns into them.
+  //
+  // A topic the user made themselves is the important case: "here is a subject
+  // I care about, go and find the turns about it" is a thing people expect to
+  // work, and until it did, adding a topic and pressing the button again
+  // simply lost it. Topics from a previous suggestion are deliberately not
+  // kept — re-running is how you ask for a different answer.
   const existingTopics: AnalysisTopic[] = state.topics
-    .filter((t) => t.builtIn)
+    .filter((t) => t.builtIn || !t.fromProposal)
     .map((t) => ({
-      id: BUILT_IN_TOPIC_MODEL_ID,
+      id: modelIdForTopic(t),
       name: t.name,
       description: t.description,
     }));
@@ -67,6 +71,31 @@ export function buildAnalysisInput(
   return state.source.title
     ? { turns, title: state.source.title, existingTopics }
     : { turns, existingTopics };
+}
+
+/**
+ * The id a model is told to use for a topic that already exists.
+ *
+ * The built-in topic keeps its own reserved word, because its rules are
+ * written in terms of it. Everything else is namespaced with the topic's own
+ * internal id, so `applyProposal` can find exactly the topic the model meant
+ * without having to reconstruct a mapping that may have changed while the
+ * request was in flight.
+ */
+export const KEPT_TOPIC_PREFIX = 'keep:';
+
+export function modelIdForTopic(topic: {
+  id: string;
+  builtIn?: boolean;
+}): string {
+  return topic.builtIn ? BUILT_IN_TOPIC_MODEL_ID : `${KEPT_TOPIC_PREFIX}${topic.id}`;
+}
+
+/** The internal topic id a reserved model id refers to, if it is one. */
+export function topicIdFromModelId(modelId: string): string | null {
+  return modelId.startsWith(KEPT_TOPIC_PREFIX)
+    ? modelId.slice(KEPT_TOPIC_PREFIX.length)
+    : null;
 }
 
 /** The topic ids a model may use without having proposed them. */
@@ -79,6 +108,21 @@ export function payloadSize(input: AnalysisInput): number {
   return input.turns.reduce((n, t) => n + t.text.length, 0);
 }
 
+/**
+ * What to do with a topic the user named before pressing the button.
+ *
+ * The point is that they are asking a question — "which parts of this are
+ * about that?" — and an empty answer is a real one. Inventing turns to fill it
+ * would be worse than saying nothing fitted.
+ */
+export const NAMED_TOPIC_RULES = [
+  'One or more of those topics were named by the person before they asked you. Treat each as a subject they want found:',
+  '- Assign every turn that genuinely belongs to it to that id.',
+  '- Do not propose a topic of your own that means the same thing. Use the existing id instead.',
+  '- Still identify the other topics in the conversation as usual, alongside it.',
+  '- If nothing in the conversation fits it, assign nothing to it. An empty topic is a truthful answer; do not stretch unrelated turns to fill it.',
+].join('\n');
+
 export const SYSTEM_PROMPT = [
   'You sort the turns of a single chat conversation into the distinct topics it contains.',
   '',
@@ -88,6 +132,7 @@ export const SYSTEM_PROMPT = [
   '- Assign every turn you are given to exactly one topic id, or to "shared".',
   '- Use "shared" only for turns that genuinely belong with every topic, such as an opening greeting or a general instruction that applies throughout.',
   '- Keep a question and its answer in the same topic.',
+  '- When a turn could belong to two topics, put it with the one it moves forward, and set "uncertain" to true. Do not use "shared" for a turn that belongs to two topics out of five — "shared" means it belongs with all of them.',
   '- Set "uncertain" to true whenever you are not confident, rather than guessing quietly.',
   '- Do not rewrite, summarise, translate, or comment on the conversation. Only classify it.',
   '- Reply with JSON matching the schema and nothing else.',
@@ -113,6 +158,9 @@ export function buildUserPrompt(input: AnalysisInput): string {
       lines.push(`- id "${topic.id}": ${topic.name}${description}`);
     }
     lines.push('');
+    if (input.existingTopics.some((t) => t.id !== BUILT_IN_TOPIC_MODEL_ID)) {
+      lines.push(NAMED_TOPIC_RULES, '');
+    }
     // The built-in topic needs its rules spelled out, because "frustration"
     // read loosely would swallow every bug report in the conversation.
     if (input.existingTopics.some((t) => t.id === BUILT_IN_TOPIC_MODEL_ID)) {
