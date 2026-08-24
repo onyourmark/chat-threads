@@ -3,12 +3,12 @@
 Chat Threads is built so that this document can be short and specific. Where a
 claim is made here, the code that makes it true is named.
 
-**Last reviewed:** 20 August 2026, against version 1.0.0.
+**Last reviewed:** 24 August 2026, against version 1.0.1.
 
 ## The short version
 
 Chat Threads has no server. It does not collect, store, sell or transmit your
-conversations. The only outbound request it can make is one you trigger
+conversations. The only outbound requests it can make are ones you trigger
 yourself, to a model provider you configure, with an API key you supply.
 
 It also holds **no standing access to any website**. Out of the box it cannot
@@ -110,9 +110,18 @@ press of the button. When you press it:
    so a new field added elsewhere cannot start being transmitted by accident.)
 4. That payload goes to `https://api.anthropic.com` or `https://api.openai.com`
    — whichever you chose — with your API key.
+5. A conversation too long to fit in one request is divided into sections and
+   sent in several requests, one after another, to that same host and nowhere
+   else. The number of sections is worked out before anything is sent
+   (`src/ai/plan.ts`), and the same rules apply to every one of those requests:
+   excluded turns are still not sent, and edited-out text is still not
+   reconstructed. Nothing extra is transmitted — the conversation is divided,
+   not supplemented.
 
-Before you press the button, the panel tells you which host will be contacted
-and roughly how many characters will be sent.
+Before you press the button, the panel tells you which host will be contacted,
+roughly how many characters will be sent, and — for a long conversation — how
+many sections and roughly how many requests that will take. A run in progress
+can be stopped.
 
 Your conversation is then subject to that provider's own privacy policy, not
 this one. No telemetry, identifier, or usage data is attached to the request,

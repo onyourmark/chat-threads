@@ -17,6 +17,7 @@ conversation content in anything you post publicly.
 | Claude retrieval | **Passed** — tested live against a real signed-in conversation |
 | The `activeTab` permission model and tab binding | **Passed** — tested live in Microsoft Edge |
 | OpenAI Find Topics | **Passed** — real API calls produced usable topics, including on a Claude conversation |
+| Find Topics on a conversation too long for one request | **Not yet tested live** — covered end to end by tests against a generated 866-turn fixture; never run against a real conversation of that size with a key |
 | Anthropic Find Topics | **Not yet tested** — needs a real Anthropic key |
 | Raw file-reference markers | **Fixed, not yet re-tested live** |
 
@@ -82,8 +83,19 @@ was slow and appeared to hit a temporary retry or reload condition before
 succeeding, and on a very long conversation a request may take several minutes.
 Treat latency and transient failures as open questions.
 
+**A very long conversation failed on 1.0.0.** A real ChatGPT conversation of
+866 turns — roughly 688,000 characters after per-turn shortening — was refused
+by OpenAI, because the whole thing went out as a single request. The panel
+reported it as a bad model name, which it was not. Version 1.0.1 divides a
+conversation that size into sections before sending anything; that is covered
+by tests but has not been repeated against the live conversation.
+
 ### What this does not establish
 
+- Nothing about **Find Topics on a conversation long enough to need sections**,
+  which is new in 1.0.1. The 866-turn case is reproduced by a generated fixture
+  and tested end to end, but no request has been made for a real conversation
+  of that size since the fix.
 - Nothing about **Anthropic Find Topics**, which still needs a real Anthropic
   key. That key is only ever needed for Find Topics, never to read a
   conversation.
@@ -418,8 +430,34 @@ this with an Anthropic key is the most valuable version of this step.
 9. Press "Clear all". **Expect:** all topics and assignments are discarded.
 10. Restart Chrome, reopen the panel. **Expect:** the key is gone (because
     "remember" was off).
-11. Repeat with a deliberately invalid key. **Expect:** "The … API rejected
-    that key", and nothing changes.
+11. Repeat with a deliberately invalid key. **Expect:** a message saying the
+    provider rejected that API key — not a message about the model name — and
+    nothing changes.
+12. Repeat with a deliberately wrong model name. **Expect:** a message about
+    the model name, and nothing changes. The two must not say the same thing.
+
+### 15a. A conversation long enough to need sections
+
+Needs a key and a genuinely long conversation — several hundred turns. This is
+the path added in 1.0.1 and the one with no live coverage yet.
+
+1. Load a conversation of roughly 500 turns or more and go to **Split**.
+2. Press "Set up" under Find Topics. **Expect:** in addition to the host and
+   the approximate size, a line saying the conversation is too long for one
+   request, how many sections it will take, and roughly how many requests.
+3. Note that number before you press anything — it is what you are agreeing to
+   pay for.
+4. Press "Send and find topics". **Expect:** a progress line that changes as it
+   goes: reading section 1 of N, then reconciling topics, then sorting section
+   1 of N.
+5. **Expect:** one coherent set of topics at the end — not several near-
+   duplicates of the same subject with different names.
+6. **Expect:** every turn has an assignment, or is listed in the notes as
+   left unassigned. No turn should be missing from the conversation.
+7. Run it again and press **Stop** partway through. **Expect:** it stops, says
+   "Stopped. Nothing was changed.", and the conversation is untouched.
+8. Check your provider's usage page. **Expect:** roughly the number of requests
+   the panel said, and no more.
 
 ## 16. Failure behaviour
 

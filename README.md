@@ -13,6 +13,8 @@ out: remove the rant, keep the useful context.
 **Your original ChatGPT or Claude conversation is never changed.** Chat Threads
 works on a copy.
 
+**[Install from the Chrome Web Store](https://chrome.google.com/webstore/detail/hihenbieafdpckdchglnpidlgeiecpmm)** — or [build it from source](#for-developers-build-from-source).
+
 ![Four-step walkthrough of Chat Threads: a ChatGPT conversation mixing a book proposal, a browser extension and travel plans; the side panel finding those as three separate topics; the user reviewing one topic and choosing which turns to remove; and the finished clean conversations ready to copy.](docs/assets/chat-threads-demo.gif)
 
 **What the demo shows.** A long conversation holds several unrelated
@@ -60,23 +62,31 @@ press the button.
 
 ## Installation
 
-Chat Threads is not in the Chrome Web Store yet, so it installs as an unpacked
-extension. Either download the built one or build it yourself — the result is
-the same folder.
+### From the Chrome Web Store
 
-### Download the built extension
+**[Add Chat Threads to Chrome](https://chrome.google.com/webstore/detail/hihenbieafdpckdchglnpidlgeiecpmm)**
 
-Take `chat-threads-1.0.0.zip` from the
-[latest release](https://github.com/onyourmark/chat-threads/releases/latest)
-and unzip it somewhere you can leave it. No Node.js, nothing to compile.
+One click, and it updates itself. This is the way to install it unless you have
+a reason to build from source. It works in Microsoft Edge too: Edge installs
+Chrome Web Store extensions once you allow it from the banner Edge shows.
 
-The archive is reproducible: running `npm run package` on the tagged commit
-produces a byte-identical file, so you can check what you downloaded against
-the source it claims to come from. The SHA-256 is published with the release.
+Then:
 
-### Or build it yourself
+1. Open a ChatGPT or Claude conversation.
+2. Click the Chat Threads toolbar icon. That one click both opens the side
+   panel and gives Chat Threads permission to read that tab.
 
-About a minute, and needs Node.js.
+You will click the icon again after reloading the page, or on a different tab.
+If you would rather not, the panel offers to let you grant ongoing access to
+chatgpt.com and claude.ai, which you can revoke at any time.
+
+Requires Chrome or Edge 116 or later (the side panel API).
+
+### For developers: build from source
+
+The extension also loads unpacked, which is what you want if you are changing
+it or would rather run something you compiled yourself. About a minute, and
+needs Node.js.
 
 ```bash
 git clone https://github.com/onyourmark/chat-threads.git
@@ -86,25 +96,22 @@ npm run icons     # generates the extension icons
 npm run build     # writes the unpacked extension to dist/
 ```
 
-### Then load it
+Or take the built `chat-threads-<version>.zip` from the
+[latest release](https://github.com/onyourmark/chat-threads/releases/latest)
+and unzip it — no Node.js, nothing to compile. The archive is reproducible:
+running `npm run package` on the tagged commit produces a byte-identical file,
+so you can check what you downloaded against the source it claims to come from.
+The SHA-256 is published with the release.
+
+Either way, load it:
 
 1. Go to `chrome://extensions` — or `edge://extensions` in Microsoft Edge.
 2. Turn on **Developer mode** (top right in Chrome, left sidebar in Edge).
 3. Click **Load unpacked** and choose the folder — the one you unzipped, or
    the `dist/` folder the build created.
-4. Open a ChatGPT or Claude conversation.
-5. Click the Chat Threads toolbar icon. That one click both opens the side
-   panel and gives Chat Threads permission to read that tab.
-
-You will click the icon again after reloading the page, or on a different tab.
-If you would rather not, the panel offers to let you grant ongoing access to
-chatgpt.com and claude.ai, which you can revoke at any time.
-
-Requires Chrome or Edge 116 or later (the side panel API).
 
 An unpacked extension does not update itself, and Chrome will remind you now
-and again that developer mode is on. Both stop being true once the Chrome Web
-Store listing is live.
+and again that developer mode is on. The Web Store install has neither.
 
 ## Private by design
 
@@ -119,9 +126,12 @@ cleaning and splitting happen entirely in your browser.
   to *on click*.
 - **Nothing leaves your machine for ordinary use.** Reading, viewing, editing,
   excluding, splitting and generating transcripts are all local.
-- **One optional outbound request.** Find Topics sends the turns you kept to the
+- **One optional outbound feature.** Find Topics sends the turns you kept to the
   model provider *you* choose, using *your* API key, and only when you press the
-  button and grant permission. Nothing is sent because you opened the panel.
+  button and grant permission. A conversation too long for one request is sent
+  in several bounded requests to that same provider and nowhere else; the panel
+  tells you how many before you press it. Nothing is sent because you opened the
+  panel.
 - **Your API key stays in memory** for the browser session unless you explicitly
   tick "remember this key".
 
@@ -257,6 +267,23 @@ Pressing **Find Topics** sends the turns you have kept — shortened to the firs
 return a strict JSON structure: a list of topics, and one assignment per turn,
 with an "uncertain" flag it is told to set whenever it is unsure.
 
+**Long conversations.** A very long chat does not fit in one request — an
+866-turn conversation is around 688,000 characters, well past what a model can
+read at once. Chat Threads works this out before it sends anything and divides
+the conversation into sections, then does three things: each section reports
+the topics it contains, one request reconciles those lists into a single set
+for the whole conversation, and each section is read again and sorted into that
+set. That middle step is why you get one coherent list rather than "Chrome
+extension publishing", "Web Store submission" and "Chrome Store setup" as three
+separate topics.
+
+You do not have to do anything differently: press the button and wait. The
+panel says how many sections and roughly how many requests before you press it,
+shows which section it is on while it runs, and has a Stop button. The 866-turn
+example above comes to 15 sections and 31 requests. A conversation so large
+that even this would be unreasonable is refused before anything is sent, rather
+than turning into a hundred paid requests.
+
 **Which key you need, and when.** Reading a conversation never needs one:
 Chat Threads uses the ChatGPT or Claude session you are already signed in with.
 An API key is only for Find Topics, and only for the provider you pick there.
@@ -306,9 +333,16 @@ Be aware of these before relying on it:
   One run was slow and appeared to retry before succeeding, and there is no
   retry logic of our own. The Anthropic client is implemented and unit-tested
   but has not been used with a real Anthropic key.
-- **Find Topics can be slow.** On a very long conversation the request may take
-  several minutes. The panel stays usable, and the result is applied to the
-  conversation it was started on even if you move around in the meantime.
+- **Find Topics can be slow on a long conversation.** A conversation that has
+  to go in sections makes one request after another, which can take several
+  minutes and costs more than a single request would. The panel says how many
+  requests that will be before you start, shows progress, and can be stopped.
+  It stays usable throughout, and the result is applied to the conversation it
+  was started on even if you move around in the meantime.
+- **Sectioned analysis is tested synthetically, not against a live long chat.**
+  The 866-turn case is reproduced by a generated fixture and covered by tests
+  end to end; the multi-request path has not been re-run against a real
+  conversation of that size with a live key.
 - **Attachments are referenced, not included.** A transcript notes that
   `spec.pdf` was attached, and an inline mention becomes
   `[Reference to attached file: spec.pdf]`; it does not contain the file.
@@ -381,8 +415,9 @@ as an official release is set out in
 
 Ideas, not commitments:
 
-- Live testing of Find Topics against the Anthropic provider, and against more
-  account types on both providers.
+- Live testing of Find Topics against the Anthropic provider, against more
+  account types on both providers, and against a real conversation long enough
+  to need the sectioned path.
 - Still images of individual views, alongside the demo at the top.
 - Remembering the working state across a panel close.
 - Reordering turns within a generated conversation.

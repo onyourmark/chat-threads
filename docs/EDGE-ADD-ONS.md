@@ -5,8 +5,8 @@ worth having alongside the Chrome one. Almost everything is shared with
 [CHROME-WEB-STORE.md](CHROME-WEB-STORE.md); this file records only what
 Microsoft does differently.
 
-**Prepared for:** version 1.0.0
-**Last reviewed:** 20 August 2026
+**Prepared for:** version 1.0.1
+**Last reviewed:** 24 August 2026
 
 ---
 
@@ -16,7 +16,7 @@ Edge is Chromium, and Partner Center takes the same Manifest V3 archive Chrome
 takes. Upload the identical file:
 
 ```
-chat-threads-1.0.0.zip
+chat-threads-1.0.1.zip
 ```
 
 Rebuild it with `npm run package` if it is not to hand. Nothing in the manifest

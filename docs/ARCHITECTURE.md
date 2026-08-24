@@ -200,8 +200,10 @@ included turns are unassigned.
 entire manual workflow — load, inspect, exclude, edit, split, generate, copy —
 runs with the AI code never executing.
 
-The contract is `TopicAnalyzer`: one method, in, out. `MockAnalyzer` implements
-it for tests, so the whole proposal path is covered without credentials.
+The contract is `TopicAnalyzer`, and a provider implements exactly one method
+of it: `complete` — one prompt in, the reply as text out. `MockAnalyzer`
+implements the same method for tests, so the whole proposal path is covered
+without credentials.
 
 A proposal is not a separate state. `applyProposal` writes into the same topic
 list and the same per-turn assignments the manual controls use, namespacing the
@@ -213,6 +215,35 @@ Validation lives in `src/ai/schema.ts` and is strict: unknown turn numbers,
 unproposed topics, duplicate or reserved ids, and control characters in names
 are all handled explicitly. Anything that fails wholesale is rejected without
 touching the conversation.
+
+### Long conversations, and why the orchestration sits above the providers
+
+A conversation can be larger than any single request. The first release
+truncated each turn and sent them all at once; on an 866-turn chat that was
+roughly 688,000 characters, and the model had no room for it.
+
+`src/ai/plan.ts` decides, before anything is sent, whether the conversation
+fits one request. When it does not, `src/ai/run.ts` runs three passes: every
+section says which topics it contains, one request reconciles those lists into
+a single canonical set, and every section is then read again and sorted into
+that set. The middle pass is the point of the design — independent sections
+would each name their own topics, and the user would be handed "Chrome
+extension publishing", "Web Store submission" and "Chrome Store setup" as three
+separate things.
+
+That logic lives above the provider classes rather than inside one, so OpenAI
+and Anthropic get identical behaviour and only their HTTP differs. The final
+assembled proposal goes through the same `validateTopicProposal` a single-pass
+run uses, so sectioning cannot introduce a class of error the one-request path
+would have caught.
+
+`src/ai/providers/errors.ts` is the other half of the same bug. HTTP 400 and
+404 had been collapsed into "check the model name", which is what the user was
+told when the real problem was request size. The provider's JSON error body is
+now read and classified — bad key, spent quota, rate limit, missing model,
+request too large, malformed request, server fault — with every
+provider-supplied string passed through `redactSecrets` first, because an error
+can quote the credential it just rejected.
 
 ## Sessions: one per tab and conversation
 

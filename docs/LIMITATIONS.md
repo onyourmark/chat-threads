@@ -104,9 +104,20 @@ from, so an OpenAI key analyses a Claude conversation perfectly well.
 
 That is not reliability. One observed run was slow and appeared to hit a
 temporary retry or reload condition before it succeeded, so latency and
-transient failure handling are open questions. On a very long conversation the
-request can take several minutes. There is no retry logic and no request
-timeout beyond the browser's own.
+transient failure handling are open questions. There is no retry logic and no
+request timeout beyond the browser's own.
+
+A later run, on an 866-turn conversation of roughly 688,000 characters, was
+rejected outright: the whole conversation went out as one request and the model
+had no room for it. Version 1.0.1 divides a conversation that size into
+sections and analyses it in several bounded requests instead. That path is
+covered end to end by tests against a generated fixture of the same size, but
+it has not yet been re-run against a real conversation with a live key — so
+treat "long conversations now work" as tested rather than field-proven. A
+sectioned run makes one request per section twice over plus one to reconcile
+them (31 requests for the 866-turn example), so it takes longer and costs more
+than a single request; the panel says how many before it starts and can be
+stopped.
 
 ### Anthropic topic proposals: not tested live
 
@@ -206,3 +217,9 @@ awkward to paste into a chat with a context limit.
 **Find Topics shortens what it sends.** Each turn is cut to its first 1,500
 characters before being sent for classification. This is good for privacy and
 cost, but a topic shift buried deep inside one very long turn may be missed.
+
+**A conversation can be too large even for sectioned analysis.** Beyond about
+1.2 million characters of retained text — roughly 24 sections, or 49 requests —
+Chat Threads refuses before sending anything rather than making a very large
+number of paid requests on your key. Excluding turns brings it back under the
+limit.

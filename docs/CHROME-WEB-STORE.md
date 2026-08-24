@@ -4,8 +4,15 @@ Everything the Chrome Web Store asks for, written out so it can be pasted
 rather than improvised, and kept in the repository so that what was submitted
 stays checkable against the code that was submitted.
 
-**Prepared for:** version 1.0.0
-**Last reviewed:** 20 August 2026
+**Prepared for:** version 1.0.1
+**Last reviewed:** 24 August 2026
+
+Version 1.0.0 is published and live. This document now describes the 1.0.1
+update, which is a bug-fix release: Find Topics could not analyse a very long
+conversation, and the error it showed pointed at the wrong cause. Nothing about
+the permissions, the data handling or the listing text changes except where a
+sentence about Find Topics has been made accurate for conversations that need
+more than one request.
 
 Nothing here is a claim the code does not already support. Where a statement
 could be doubted, the file that makes it true is named.
@@ -27,7 +34,8 @@ nothing else — no source, no maps, no tests, no keys, no `node_modules`. The
 archive uses a fixed timestamp, so the same commit produces a byte-identical
 file and a submission can be checked against the source it claims to come from.
 
-Contents of the 1.0.0 package (305,513 bytes uncompressed, 87 KB archived):
+Contents of the 1.0.1 package (320,044 bytes uncompressed, 92,888 bytes
+archived — 91 KB):
 
 | File | Bytes |
 | --- | --- |
@@ -35,12 +43,15 @@ Contents of the 1.0.0 package (305,513 bytes uncompressed, 87 KB archived):
 | `sidepanel.html` | 379 |
 | `background.js` | 41,520 |
 | `content.js` | 40,989 |
-| `assets/index.js` | 210,629 |
+| `assets/index.js` | 225,160 |
 | `assets/index.css` | 9,074 |
 | `icons/icon-16.png` | 149 |
 | `icons/icon-32.png` | 236 |
 | `icons/icon-48.png` | 335 |
 | `icons/icon-128.png` | 999 |
+
+SHA-256 of `chat-threads-1.0.1.zip`:
+`4ef6b180d3e3e5b3e3982ab81544fce17ee9a0d418bd9f7f2b35f9bd75e2be29`
 
 The zip file is not committed: `.gitignore` excludes `*.zip`, because a build
 artifact that can be reproduced from source does not belong in history.
@@ -96,7 +107,7 @@ NO STANDING ACCESS TO ANY SITE
 Chat Threads asks for no host permissions when you install it. It cannot read ChatGPT, Claude or anything else until you click its toolbar icon on a tab, and that access ends when you navigate away. If you would rather not click each time, you can grant ongoing access to the two provider sites from inside the panel, and take it back from Chrome's extension settings.
 
 FIND TOPICS IS OPTIONAL
-Everything above works with no API key. Find Topics is a separate button that asks a model to propose the topic split for you. It runs only when you press it, only with an API key you supply, and it sends the turns you have kept to Anthropic or OpenAI — whichever you chose. Before you press it, the panel names the host it will contact and roughly how many characters it will send. Your key is held in session storage and forgotten when you close Chrome, unless you tick the box to remember it.
+Everything above works with no API key. Find Topics is a separate button that asks a model to propose the topic split for you. It runs only when you press it, only with an API key you supply, and it sends the turns you have kept to Anthropic or OpenAI — whichever you chose. A conversation too long to fit in one request is divided into sections and sent in several requests to that same provider, and the panel tells you how many before you press the button. Before you press it, the panel also names the host it will contact and roughly how many characters it will send, and a run can be stopped while it is going. Your key is held in session storage and forgotten when you close Chrome, unless you tick the box to remember it.
 
 WHAT IT DOES NOT DO
 It does not read attachment or image contents, only file names. It does not read model reasoning, system prompts or custom instructions. It does not save your working copy — copy what you want before you close the panel.
@@ -224,7 +235,7 @@ Five origins are declared as optional_host_permissions and requested only at the
 
 https://chatgpt.com/*, https://chat.openai.com/*, https://claude.ai/* — requested only if the user chooses, from inside the panel, to grant ongoing access so they no longer have to click the toolbar icon on every visit. The extension is fully usable without this; it is a convenience the user opts into and can revoke from chrome://extensions.
 
-https://api.anthropic.com/*, https://api.openai.com/* — requested the first time the user uses the optional Find Topics feature, so the side panel can send that one request to the model provider the user selected, with the user's own API key. Not requested at any other time, and not requested at all if the feature is never used.
+https://api.anthropic.com/*, https://api.openai.com/* — requested the first time the user uses the optional Find Topics feature, so the side panel can send the conversation to the model provider the user selected, with the user's own API key. That is one request for an ordinary conversation; a conversation too long for a single request is divided into sections and sent in several bounded requests to the same host, and the panel states how many before the user confirms. Not requested at any other time, and not requested at all if the feature is never used.
 
 The extension does not request <all_urls>, tabs, history, cookies, downloads, webRequest or bookmarks.
 ```
@@ -306,6 +317,7 @@ FIND TOPICS IS OPTIONAL AND OFF UNLESS YOU SUPPLY A KEY
 "Find Topics" is the only feature that sends anything anywhere. It is collapsed by default and labelled Optional.
 - With no key: press "Set up" to expand it and then "Send and find topics". The panel replies "Enter an API key first." and makes no network request. Nothing leaves the browser.
 - With a key: paste any Anthropic or OpenAI API key of your own into "Your API key". Chrome will then prompt for the optional host permission for api.anthropic.com or api.openai.com — that permission is not held until this point. The panel states, before you press the button, which host it will contact and roughly how many characters it will send. Only kept turns are sent, truncated to 1,500 characters each; excluded turns and text edited out are not sent.
+- On a very long conversation, one request would exceed what a model can read. The panel works this out before sending anything, says how many sections and roughly how many requests it will take, and then makes those requests one after another to the same host, showing which section it is on and offering a Stop button. No other host is contacted, and nothing beyond the kept turns is sent.
 - No key is embedded in the extension or in the repository, by design. If you would prefer to test with a key we provide rather than one of your own, please ask and we will supply one through the dashboard's test-credentials field.
 
 PERMISSIONS
@@ -330,17 +342,17 @@ ChatGPT and Claude do not publish the interfaces this extension reads from, so a
 
 ## 7. What was checked before submission
 
-Run on 20 August 2026 against the commit that produced the 1.0.0 package.
+Run on 24 August 2026 against the commit that produced the 1.0.1 package.
 
 | Check | Result |
 | --- | --- |
 | `npm run lint` | Clean |
 | `npm run typecheck` | Clean |
-| `npm test` | 348 tests in 16 files, all passing |
+| `npm test` | 424 tests in 19 files, all passing |
 | `npm run package` | 10 files, allow-list and forbid-list both satisfied |
 | Source maps in package | None; no `sourceMappingURL` in any shipped file |
 | Credential scan, working tree | Nothing found |
-| Credential scan, all 165 git blobs in history | Nothing found |
+| Credential scan, all git blobs in history | Nothing found |
 | Credential scan, shipped bundles | Nothing found |
 | `.pem` / `.p12` / `.key` / `.env` tracked | None |
 | `eval` / `new Function` / `importScripts` / injected scripts in package | None |
