@@ -8,10 +8,12 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SHARED, UNASSIGNED } from '../../model/types';
+import { SHARED, UNASSIGNED, type Turn } from '../../model/types';
 import {
   addTopic,
+  addTurnToTopic,
   clearTopics,
+  removeTurnFromTopic,
   removeTopic,
   renameTopic,
   setAssignment,
@@ -63,11 +65,21 @@ export function SplitView({
   */
   const counts = useMemo(() => {
     const out = new Map<string, number>();
+    let shared = 0;
     for (const turn of state.turns) {
       if (!turn.included) continue;
+      if (turn.assignment === SHARED) {
+        shared += 1;
+        continue;
+      }
       out.set(turn.assignment, (out.get(turn.assignment) ?? 0) + 1);
+      // A turn in two topics counts once in each, which is exactly how many
+      // times it will appear in the exported files.
+      for (const id of turn.alsoIn) {
+        out.set(id, (out.get(id) ?? 0) + 1);
+      }
     }
-    return out;
+    return { byTopic: out, shared };
   }, [state.turns]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const hasProposal = state.topics.some((t) => t.fromProposal);
@@ -97,7 +109,7 @@ export function SplitView({
       {state.topics.length > 0 && (
         <div className="topic-list">
           {state.topics.map((topic, i) => {
-            const count = counts.get(topic.id) ?? 0;
+            const count = counts.byTopic.get(topic.id) ?? 0;
             return (
               <div className="topic-card" key={topic.id}>
                 <div className="topic-row">
@@ -119,8 +131,14 @@ export function SplitView({
                   </button>
                 </div>
                 <div className="topic-meta">
+                  {/*
+                    Both numbers, because they mean different things and the
+                    exported file contains their sum. A topic showing "23" and
+                    exporting hundreds of turns is how a bug hides.
+                  */}
                   <span>
                     {count} turn{count === 1 ? '' : 's'}
+                    {counts.shared > 0 && ` + ${counts.shared} shared`}
                   </span>
                   <button
                     type="button"
@@ -250,9 +268,79 @@ export function SplitView({
               <option value={SHARED}>Shared (every topic)</option>
             </select>
           </div>
+
+          {/*
+            A turn can belong to more than one topic without belonging to all
+            of them. The extra memberships are listed here so they are visible
+            and removable — before this existed the only way to say "two of
+            these" was Shared, which meant all fifteen.
+          */}
+          {turn.alsoIn.length > 0 && (
+            <div className="assign also-in">
+              <span className="also-in-label">Also in</span>
+              {turn.alsoIn.map((id) => {
+                const topic = state.topics.find((t) => t.id === id);
+                if (!topic) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className="chip"
+                    title={`Take this turn out of ${topic.name}`}
+                    onClick={() =>
+                      onChange(removeTurnFromTopic(state, turn.id, id))
+                    }
+                  >
+                    {topic.name}
+                    <span aria-hidden="true"> ×</span>
+                    <span className="sr-only">
+                      {` — remove from ${topic.name}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {turn.included &&
+            turn.assignment !== UNASSIGNED &&
+            turn.assignment !== SHARED &&
+            addable(state, turn).length > 0 && (
+              <div className="assign also-in">
+                <label
+                  htmlFor={`also-${turn.id}`}
+                  style={{ flex: 'none' }}
+                  className="also-in-label"
+                >
+                  Add to
+                </label>
+                <select
+                  id={`also-${turn.id}`}
+                  value=""
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    onChange(addTurnToTopic(state, turn.id, e.target.value));
+                  }}
+                >
+                  <option value="">Another topic…</option>
+                  {addable(state, turn).map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
         </TurnCard>
       ))}
     </>
+  );
+}
+
+/** Topics this turn is not already in, for the "Add to" list. */
+function addable(state: WorkingState, turn: Turn) {
+  return state.topics.filter(
+    (t) => t.id !== turn.assignment && !turn.alsoIn.includes(t.id),
   );
 }
 

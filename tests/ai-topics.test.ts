@@ -37,8 +37,10 @@ const VALID_REPLY = JSON.stringify({
     { id: 't3', name: 'Travel', description: 'Weather in Lisbon.' },
   ],
   assignments: [
-    { turn: 0, topic: 'shared', uncertain: false },
-    { turn: 1, topic: 'shared', uncertain: false },
+    { turn: 0, topic: 't1', uncertain: false },
+    // Turn 1 belongs to two of the three topics: listed twice, once each.
+    { turn: 1, topic: 't1', uncertain: false },
+    { turn: 1, topic: 't2', uncertain: false },
     { turn: 2, topic: 't1', uncertain: false },
     { turn: 3, topic: 't1', uncertain: false },
     { turn: 4, topic: 't2', uncertain: false },
@@ -57,7 +59,8 @@ describe('validating model output', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.proposal.topics).toHaveLength(3);
-    expect(result.proposal.assignments).toHaveLength(8);
+    // Nine memberships across eight turns: turn 1 is in two topics.
+    expect(result.proposal.assignments).toHaveLength(9);
     expect(result.proposal.unplaced).toEqual([]);
   });
 
@@ -253,9 +256,14 @@ describe('applying a proposal', () => {
 
     expect(proposed).toHaveLength(3);
     expect(proposed[0]?.name).toBe('Browser extension design');
-    expect(next.turns[0]?.assignment).toBe(SHARED);
+    expect(next.turns[0]?.assignment).toBe(proposed[0]?.id);
     expect(next.turns[2]?.assignment).toBe(proposed[0]?.id);
     expect(next.turns[6]?.assignment).toBe(proposed[2]?.id);
+
+    // A turn in two topics is in exactly those two, and not Shared.
+    expect(next.turns[1]?.assignment).toBe(proposed[0]?.id);
+    expect(next.turns[1]?.alsoIn).toEqual([proposed[1]?.id]);
+    expect(next.turns.every((t) => t.assignment !== SHARED)).toBe(true);
   });
 
   it('marks uncertain turns and leaves the rest unmarked', async () => {
@@ -322,7 +330,9 @@ describe('applying a proposal', () => {
     const applied = applyProposal(state, result.proposal);
     expect(applied.turns[5]?.uncertain).toBe(true);
 
+    // Shared is still available — to the person, from the dropdown.
     const corrected = setAssignment(applied, 'chatgpt-5', SHARED);
+    expect(corrected.turns[5]?.assignment).toBe(SHARED);
     expect(corrected.turns[5]?.uncertain).toBe(false);
     expect(corrected.turns[5]?.assignmentOverridden).toBe(true);
   });

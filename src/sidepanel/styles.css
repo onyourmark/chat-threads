@@ -148,6 +148,52 @@ textarea {
   The fixed furniture around the scrolling region. Each sizes to its content
   and neither grows nor shrinks, so the height left over goes to `.scroll`.
 */
+/* A turn that belongs to more than one topic, without belonging to all. */
+.also-in {
+  padding: 4px 0 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.also-in-label {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.chip {
+  appearance: none;
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .zoom {
   display: flex;
   align-items: center;

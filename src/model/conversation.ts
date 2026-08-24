@@ -48,6 +48,7 @@ export function buildTurns(
     references: r.references ?? [],
     included: true,
     assignment: UNASSIGNED,
+    alsoIn: [],
     edited: false,
     uncertain: false,
     assignmentOverridden: false,

@@ -131,6 +131,7 @@ describe('messages crossing an extension boundary are validated', () => {
     const turn = result.conversation.turns[0]!;
     expect(Object.keys(turn).sort()).toEqual(
       [
+        'alsoIn',
         'assignment',
         'assignmentOverridden',
         'attachments',

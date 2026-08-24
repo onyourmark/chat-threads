@@ -105,7 +105,7 @@ export const SECTION_ASSIGNMENTS_SCHEMA = {
           topic: {
             type: 'string',
             description:
-              'A topic id from the list you were given, or "shared" when the turn belongs to every topic.',
+              'A topic id from the list you were given. To put one turn in two topics, list it twice, once for each.',
           },
           uncertain: {
             type: 'boolean',
@@ -149,11 +149,12 @@ export const CLASSIFY_SYSTEM_PROMPT = [
   'You are sorting the turns of one section of a long chat conversation into topics that have already been chosen for the whole conversation.',
   '',
   'Rules:',
-  '- Use only the topic ids you are given, or "shared". Never invent a topic id.',
-  '- Assign every turn in this section to exactly one topic id, or to "shared".',
-  '- Use "shared" only for turns that genuinely belong with every topic, such as an opening greeting or a general instruction that applies throughout.',
+  '- Use only the topic ids you are given. Never invent a topic id, and never use "shared".',
+  '- Assign every turn in this section to the topic it belongs to.',
+  '- A turn that genuinely belongs to two topics may be listed twice, once for each. Do this only when it really belongs to both.',
+  '- Do not put a turn in a topic it is not about. It is better to leave a turn out than to put it in every topic.',
   '- Keep a question and its answer in the same topic.',
-  '- When a turn could belong to two topics, put it with the one it moves forward, and set "uncertain" to true. Do not use "shared" for a turn that belongs to two topics out of fifteen — "shared" means it belongs with all of them.',
+  '- Set "uncertain" to true when you are not confident, rather than spreading the turn across topics.',
   '- Turns marked "context only" are shown as background. Do not assign them.',
   '- Set "uncertain" to true whenever you are not confident, rather than guessing quietly.',
   '- Do not rewrite, summarise, translate, or comment on the conversation. Only classify it.',
@@ -295,7 +296,7 @@ export function buildClassifyPrompt(
     const description = topic.description ? ` — ${topic.description}` : '';
     lines.push(`- id "${topic.id}": ${topic.name}${description}`);
   }
-  lines.push('- id "shared": belongs with every topic.', '');
+  lines.push('');
 
   if (hasBuiltIn(input)) {
     lines.push(BUILT_IN_TOPIC_RULES, '');
@@ -458,7 +459,9 @@ export function validateSectionAssignments(
   }
 
   const assignments: ProposedAssignment[] = [];
-  const placed = new Set<number>();
+  // A turn listed twice under different topics belongs to both; the same pair
+  // twice is a repetition. Matches the single-pass validator exactly.
+  const pairs = new Set<string>();
   let dropped = 0;
 
   for (const a of raw.assignments as unknown[]) {
@@ -475,16 +478,19 @@ export function validateSectionAssignments(
       dropped += 1;
       continue;
     }
-    if (placed.has(turn)) {
-      dropped += 1;
-      continue; // first assignment wins, as in the single-pass validator
-    }
     const topic = typeof a.topic === 'string' ? cleanText(a.topic, 64) : '';
-    if (topic !== SHARED_TOPIC && !allowedTopics.has(topic)) {
+    // Shared means every topic. A section that cannot place a turn must leave
+    // it unplaced rather than putting it in all fifteen.
+    if (topic === SHARED_TOPIC || !allowedTopics.has(topic)) {
       dropped += 1;
       continue;
     }
-    placed.add(turn);
+    const pair = JSON.stringify([turn, topic]);
+    if (pairs.has(pair)) {
+      dropped += 1;
+      continue;
+    }
+    pairs.add(pair);
     assignments.push({ turn, topic, uncertain: a.uncertain === true });
   }
 

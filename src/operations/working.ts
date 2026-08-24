@@ -119,12 +119,29 @@ export function turnsAssignedTo(
   state: WorkingState,
   topicId: string,
 ): Turn[] {
-  return state.turns.filter((t) => t.assignment === topicId);
+  return state.turns.filter((t) => belongsTo(t, topicId));
+}
+
+/**
+ * Does this turn belong to this topic in its own right?
+ *
+ * Deliberately does not consider SHARED. A shared turn appears in every topic
+ * transcript, but it is not *about* any of them, and counting it as though it
+ * were is what let a topic with nothing of its own export most of the
+ * conversation.
+ */
+export function belongsTo(turn: Turn, topicId: string): boolean {
+  return turn.assignment === topicId || turn.alsoIn.includes(topicId);
 }
 
 /** How many turns each topic owns, for the topic list. */
 export function countAssignedTo(state: WorkingState, topicId: string): number {
   return turnsAssignedTo(state, topicId).length;
+}
+
+/** Turns marked Shared, which reach every topic conversation. */
+export function sharedTurns(state: WorkingState): Turn[] {
+  return state.turns.filter((t) => t.included && t.assignment === SHARED);
 }
 
 /**
@@ -176,9 +193,67 @@ export function setAssignment(
   return mapTurn(state, turnId, (t) => ({
     ...t,
     assignment,
+    // Choosing one topic from the dropdown is a definitive statement about
+    // where this turn goes, so it replaces every other membership rather than
+    // quietly leaving the turn in topics the user can no longer see named.
+    alsoIn: [],
     uncertain: byUser ? false : t.uncertain,
     assignmentOverridden: byUser ? true : t.assignmentOverridden,
   }));
+}
+
+/**
+ * Put a turn in another topic as well, without moving it out of the one it is
+ * already in.
+ */
+export function addTurnToTopic(
+  state: WorkingState,
+  turnId: string,
+  topicId: string,
+): WorkingState {
+  return mapTurn(state, turnId, (t) => {
+    if (t.assignment === topicId || t.alsoIn.includes(topicId)) return t;
+    // A turn that was nowhere becomes a turn that is somewhere, rather than
+    // gaining a second home it does not have a first one for.
+    if (t.assignment === UNASSIGNED || t.assignment === SHARED) {
+      return { ...t, assignment: topicId, alsoIn: [], assignmentOverridden: true, uncertain: false };
+    }
+    return {
+      ...t,
+      alsoIn: [...t.alsoIn, topicId],
+      assignmentOverridden: true,
+      uncertain: false,
+    };
+  });
+}
+
+/** Take a turn out of one topic, leaving any others it belongs to alone. */
+export function removeTurnFromTopic(
+  state: WorkingState,
+  turnId: string,
+  topicId: string,
+): WorkingState {
+  return mapTurn(state, turnId, (t) => {
+    if (t.alsoIn.includes(topicId)) {
+      return {
+        ...t,
+        alsoIn: t.alsoIn.filter((id) => id !== topicId),
+        assignmentOverridden: true,
+        uncertain: false,
+      };
+    }
+    if (t.assignment !== topicId) return t;
+    // Removing the primary promotes the next membership, so a turn in two
+    // topics does not fall out of both at once.
+    const [next, ...rest] = t.alsoIn;
+    return {
+      ...t,
+      assignment: next ?? UNASSIGNED,
+      alsoIn: rest,
+      assignmentOverridden: true,
+      uncertain: false,
+    };
+  });
 }
 
 /** Assign several turns at once, used when applying an AI proposal. */
@@ -187,6 +262,8 @@ export function setAssignments(
   updates: ReadonlyArray<{
     turnId: string;
     assignment: TopicAssignment;
+    /** Further topics, for a turn that genuinely belongs to more than one. */
+    alsoIn?: readonly string[];
     uncertain?: boolean;
   }>,
   options: AssignOptions = {},
@@ -202,6 +279,7 @@ export function setAssignments(
       return {
         ...t,
         assignment: u.assignment,
+        alsoIn: (u.alsoIn ?? []).filter((id) => id !== u.assignment),
         uncertain: byUser ? false : (u.uncertain ?? false),
         assignmentOverridden: byUser ? true : false,
       };
@@ -248,9 +326,14 @@ export function removeTopic(
   return {
     ...state,
     topics: state.topics.filter((t) => t.id !== topicId),
-    turns: state.turns.map((t) =>
-      t.assignment === topicId ? { ...t, assignment: UNASSIGNED } : t,
-    ),
+    turns: state.turns.map((t) => {
+      if (!belongsTo(t, topicId)) return t;
+      const alsoIn = t.alsoIn.filter((id) => id !== topicId);
+      if (t.assignment !== topicId) return { ...t, alsoIn };
+      // Promote the next membership rather than dropping the turn entirely.
+      const [next, ...rest] = alsoIn;
+      return { ...t, assignment: next ?? UNASSIGNED, alsoIn: rest };
+    }),
   };
 }
 
@@ -263,13 +346,18 @@ export function setTopics(
   return {
     ...state,
     topics: [...topics],
-    turns: state.turns.map((t) =>
-      t.assignment === SHARED ||
-      t.assignment === UNASSIGNED ||
-      valid.has(t.assignment)
-        ? t
-        : { ...t, assignment: UNASSIGNED },
-    ),
+    turns: state.turns.map((t) => {
+      const alsoIn = t.alsoIn.filter((id) => valid.has(id));
+      const keepsPrimary =
+        t.assignment === SHARED ||
+        t.assignment === UNASSIGNED ||
+        valid.has(t.assignment);
+      if (keepsPrimary) {
+        return alsoIn.length === t.alsoIn.length ? t : { ...t, alsoIn };
+      }
+      const [next, ...rest] = alsoIn;
+      return { ...t, assignment: next ?? UNASSIGNED, alsoIn: rest };
+    }),
   };
 }
 
@@ -281,6 +369,7 @@ export function clearTopics(state: WorkingState): WorkingState {
     turns: state.turns.map((t) => ({
       ...t,
       assignment: UNASSIGNED,
+      alsoIn: [],
       uncertain: false,
       assignmentOverridden: false,
     })),
@@ -304,6 +393,71 @@ export interface WorkingStats {
   unassigned: number;
   shared: number;
   uncertain: number;
+}
+
+/**
+ * How the included turns are spread across topics — counts only.
+ *
+ * Deliberately carries no text of any kind: topic ids and numbers, nothing
+ * else. It exists because "why is every topic file the size of the whole
+ * conversation?" is a question about distribution, and answering it should
+ * never involve printing somebody's conversation. Safe to show, safe to paste
+ * into a bug report, and not sent anywhere.
+ */
+export interface AssignmentSummary {
+  /** Included turns that belong to at least one topic. */
+  placed: number;
+  /** Included turns marked Shared, which reach every topic. */
+  shared: number;
+  /** Included turns in no topic at all. */
+  unassigned: number;
+  /** Turns belonging to more than one topic. */
+  multiTopic: number;
+  /** Topic id -> how many turns it owns. */
+  perTopic: ReadonlyMap<string, number>;
+  /** What the largest topic file would be, as a share of the cleaned one. */
+  largestTopicShare: number;
+}
+
+export function assignmentSummary(state: WorkingState): AssignmentSummary {
+  const perTopic = new Map<string, number>();
+  for (const topic of state.topics) perTopic.set(topic.id, 0);
+
+  let placed = 0;
+  let shared = 0;
+  let unassigned = 0;
+  let multiTopic = 0;
+  let included = 0;
+
+  for (const turn of state.turns) {
+    if (!turn.included) continue;
+    included += 1;
+    if (turn.assignment === SHARED) {
+      shared += 1;
+      continue;
+    }
+    if (turn.assignment === UNASSIGNED && turn.alsoIn.length === 0) {
+      unassigned += 1;
+      continue;
+    }
+    placed += 1;
+    if (turn.alsoIn.length > 0) multiTopic += 1;
+    for (const id of [turn.assignment, ...turn.alsoIn]) {
+      if (id === UNASSIGNED) continue;
+      perTopic.set(id, (perTopic.get(id) ?? 0) + 1);
+    }
+  }
+
+  const largest = Math.max(0, ...perTopic.values());
+  return {
+    placed,
+    shared,
+    unassigned,
+    multiTopic,
+    perTopic,
+    // The number that would have been near 1 during the live failure.
+    largestTopicShare: included === 0 ? 0 : (largest + shared) / included,
+  };
 }
 
 export function stats(state: WorkingState): WorkingStats {
@@ -342,6 +496,7 @@ export function hasChanges(state: WorkingState): boolean {
   if (!topicsAreDefault) return true;
 
   return state.turns.some(
-    (t) => !t.included || t.edited || t.assignment !== UNASSIGNED,
+    (t) =>
+      !t.included || t.edited || t.assignment !== UNASSIGNED || t.alsoIn.length > 0,
   );
 }

@@ -302,6 +302,22 @@ export function parseSourceConversation(v: unknown): SourceConversation | null {
         references,
         included: t.included !== false,
         assignment: isString(t.assignment) ? t.assignment : 'unassigned',
+        // Rebuilt rather than trusted, like everything else crossing the
+        // boundary: strings only, no duplicates, and never the sentinels or
+        // the primary assignment restated.
+        alsoIn: Array.isArray(t.alsoIn)
+          ? [
+              ...new Set(
+                (t.alsoIn as unknown[]).filter(
+                  (id): id is string =>
+                    isString(id) &&
+                    id !== t.assignment &&
+                    id !== 'shared' &&
+                    id !== 'unassigned',
+                ),
+              ),
+            ]
+          : [],
         edited: t.edited === true,
         uncertain: t.uncertain === true,
         assignmentOverridden: t.assignmentOverridden === true,

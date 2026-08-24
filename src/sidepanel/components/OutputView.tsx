@@ -9,7 +9,6 @@
 import { useMemo, useState } from 'react';
 import {
   CONTINUATION_HEADER,
-  fileNameFor,
   generateCleaned,
   generateSplit,
   renderJson,
@@ -18,7 +17,10 @@ import {
   unassignedIncludedTurns,
   type GeneratedConversation,
 } from '../../operations/transcript';
-import type { WorkingState } from '../../operations/working';
+import {
+  assignmentSummary,
+  type WorkingState,
+} from '../../operations/working';
 import { isPristineDefaultTopic } from '../../model/default-topic';
 import { copyText, downloadBlob, downloadMany, downloadText } from '../chrome';
 import {
@@ -54,7 +56,10 @@ export function OutputView({ state }: Props) {
     const split = generateSplit(state).filter((conversation) => {
       const topic = state.topics.find((t) => t.id === conversation.topicId);
       if (!topic || !isPristineDefaultTopic(topic)) return true;
-      return conversation.turns.length > 0;
+      // Its *own* turns, not its total. A shared turn reaches every topic, so
+      // counting those here made an untouched "Why is AI so stupid?" export
+      // most of the conversation on the strength of belonging to none of it.
+      return (conversation.ownTurnCount ?? conversation.turns.length) > 0;
     });
 
     return split.length > 0 ? [cleaned, ...split] : [cleaned];
@@ -69,6 +74,11 @@ export function OutputView({ state }: Props) {
   const stranded =
     conversations.length > 1 ? unassignedIncludedTurns(state) : [];
 
+  // Shared is now only ever a person's choice, so this is a count of decisions
+  // they made rather than something a suggestion did to them.
+  const summary = useMemo(() => assignmentSummary(state), [state]);
+  const sharedCount = summary.shared;
+
   const doCopy = async (c: GeneratedConversation) => {
     const ok = await copyText(render(c));
     setCopied(ok ? c.id : `failed:${c.id}`);
@@ -81,16 +91,26 @@ export function OutputView({ state }: Props) {
    * The cleaned conversation is included: it is the one that has everything in
    * it, and leaving it out of an "export everything" button would be odd.
    */
+  /**
+   * What one conversation's file is called.
+   *
+   * The topic's own name, not the generated heading: the user asked for files
+   * called "Why is AI so stupid", not "Conversation 2: Why is AI so stupid".
+   * The cleaned conversation has no topic, so it keeps its title.
+   *
+   * Used by the single Download buttons as well as the bulk export, so the
+   * same conversation cannot arrive under two different names depending on
+   * which button was pressed.
+   */
+  const nameFor = (c: GeneratedConversation, extension: string) => {
+    const topic = state.topics.find((t) => t.id === c.topicId);
+    return topicFileName(topic?.name ?? c.title, extension);
+  };
+
   const exportFiles = () => {
     const extension = plainText ? 'txt' : 'md';
-    // The topic's own name, not the generated heading: the user asked for
-    // files called "Why is AI so stupid", not "Conversation 2: Why is AI so
-    // stupid". The cleaned conversation has no topic, so it keeps its title.
     const names = uniqueFileNames(
-      conversations.map((c) => {
-        const topic = state.topics.find((t) => t.id === c.topicId);
-        return topicFileName(topic?.name ?? c.title, extension);
-      }),
+      conversations.map((c) => nameFor(c, extension)),
     );
     return conversations.map((c, i) => ({
       name: names[i]!,
@@ -184,6 +204,25 @@ export function OutputView({ state }: Props) {
         </div>
       )}
 
+      {sharedCount > 0 && conversations.length > 1 && (
+        <div className="notice">
+          <p style={{ margin: 0 }}>
+            <strong>
+              {sharedCount} Shared turn{sharedCount === 1 ? '' : 's'}
+            </strong>{' '}
+            will appear in every topic conversation below. Change any of them
+            in Split if that is not what you meant.
+          </p>
+          {summary.largestTopicShare > 0.5 && (
+            <p className="hint" style={{ marginTop: 4 }}>
+              That puts most of the conversation into every topic file. Shared
+              means <em>every</em> topic — a turn that belongs to two of them
+              should go in those two instead.
+            </p>
+          )}
+        </div>
+      )}
+
       {stranded.length > 0 && (
         <div className="notice warn">
           <h3>
@@ -234,7 +273,7 @@ export function OutputView({ state }: Props) {
                   className="btn small"
                   onClick={() =>
                     downloadText(
-                      fileNameFor(c, plainText ? 'txt' : 'md'),
+                      nameFor(c, plainText ? 'txt' : 'md'),
                       text,
                       plainText ? 'text/plain' : 'text/markdown',
                     )
@@ -248,7 +287,7 @@ export function OutputView({ state }: Props) {
                   className="btn small"
                   onClick={() =>
                     downloadText(
-                      fileNameFor(c, 'json'),
+                      nameFor(c, 'json'),
                       renderJson(c, state),
                       'application/json',
                     )

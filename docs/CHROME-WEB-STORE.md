@@ -11,8 +11,10 @@ Version 1.0.0 is published and live. This document describes the 1.0.1 update.
 
 Fixes: Find Topics could not analyse a very long conversation; the error it
 showed pointed at the wrong cause; a topic the user added was ignored when they
-pressed the button again; and the panel's own layout let one summary crowd out
-the workspace and made a long conversation feel slow.
+pressed the button again; every exported topic file contained most of the
+conversation because suggestions used Shared as a catch-all; and the panel's
+own layout let one summary crowd out the workspace and made a long conversation
+feel slow.
 
 Additions: a branch-point indicator for ChatGPT conversations created with
 "Branch in new chat", an export-everything button, and a size control for the
@@ -42,24 +44,24 @@ nothing else — no source, no maps, no tests, no keys, no `node_modules`. The
 archive uses a fixed timestamp, so the same commit produces a byte-identical
 file and a submission can be checked against the source it claims to come from.
 
-Contents of the 1.0.1 package (352,656 bytes uncompressed, 101,844 bytes
-archived — 99 KB):
+Contents of the 1.0.1 package (356,781 bytes uncompressed, 102,972 bytes
+archived — 101 KB):
 
 | File | Bytes |
 | --- | --- |
 | `manifest.json` | 1,203 |
 | `sidepanel.html` | 379 |
-| `background.js` | 47,635 |
-| `content.js` | 47,104 |
-| `assets/index.js` | 243,729 |
-| `assets/index.css` | 10,887 |
+| `background.js` | 47,653 |
+| `content.js` | 47,122 |
+| `assets/index.js` | 247,389 |
+| `assets/index.css` | 11,316 |
 | `icons/icon-16.png` | 149 |
 | `icons/icon-32.png` | 236 |
 | `icons/icon-48.png` | 335 |
 | `icons/icon-128.png` | 999 |
 
 SHA-256 of `chat-threads-1.0.1.zip`:
-`906c3f1225841e360291bcd8d1a70e96c6a51bd630b6d840edd274c2faa89000`
+`4d082ac2c226d4c0e7df1e4c22571f7049a715fef0a027cbce08ddf8e04323e5`
 
 The zip file is not committed: `.gitignore` excludes `*.zip`, because a build
 artifact that can be reproduced from source does not belong in history.
@@ -100,7 +102,7 @@ CLEAN
 Exclude whole turns, or edit a turn to cut one paragraph and keep the rest.
 
 SPLIT
-Assign each turn to a topic, so one conversation becomes several. Mark a turn Shared to put it in every topic; leave one Unassigned to drop it from all of them. Review a topic before you take it out.
+Assign each turn to a topic, so one conversation becomes several. A turn that belongs to two topics can go in both. Mark a turn Shared to put it in every topic; leave one Unassigned to drop it from all of them. Review a topic before you take it out.
 
 OUTPUT
 Copy the result to the clipboard, or download it as Markdown, plain text or JSON — either the whole cleaned conversation or one topic on its own. Or export everything at once: one file per topic, named after the topic, as a zip or as separate downloads. Paste it into a new chat and continue from there.
@@ -359,7 +361,7 @@ Run on 24 August 2026 against the commit that produced the 1.0.1 package.
 | --- | --- |
 | `npm run lint` | Clean |
 | `npm run typecheck` | Clean |
-| `npm test` | 545 tests in 27 files, all passing |
+| `npm test` | 577 tests in 29 files, all passing |
 | `npm run package` | 10 files, allow-list and forbid-list both satisfied |
 | Source maps in package | None; no `sourceMappingURL` in any shipped file |
 | Credential scan, working tree | Nothing found |

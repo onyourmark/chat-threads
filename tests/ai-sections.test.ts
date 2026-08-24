@@ -598,11 +598,20 @@ describe('the built-in topic across sections', () => {
       ...cooperativeScript(),
       classify: (request) =>
         JSON.stringify({
-          assignments: assignableTurns(request.user).map((turn, i) => ({
-            turn,
-            topic: i === 0 ? BUILT_IN_TOPIC_MODEL_ID : i === 1 ? SHARED : 'c1',
-            uncertain: false,
-          })),
+          assignments: assignableTurns(request.user).flatMap((turn, i) => {
+            if (i === 0) {
+              return [{ turn, topic: BUILT_IN_TOPIC_MODEL_ID, uncertain: false }];
+            }
+            // A turn in two topics is listed twice — which is what a model now
+            // has instead of "shared", and is a far narrower claim.
+            if (i === 1) {
+              return [
+                { turn, topic: 'c1', uncertain: false },
+                { turn, topic: 'c2', uncertain: false },
+              ];
+            }
+            return [{ turn, topic: 'c1', uncertain: false }];
+          }),
         }),
     });
 
@@ -631,7 +640,10 @@ describe('the built-in topic across sections', () => {
     expect(
       applied.turns.some((t) => t.assignment === BUILT_IN_TOPIC_ID),
     ).toBe(true);
-    expect(applied.turns.some((t) => t.assignment === SHARED)).toBe(true);
+    // Nothing a model said becomes Shared: that would put the turn in every
+    // topic, and is a decision only a person makes.
+    expect(applied.turns.every((t) => t.assignment !== SHARED)).toBe(true);
+    expect(applied.turns.some((t) => t.alsoIn.length > 0)).toBe(true);
   });
 
   it('rejects a merged list that tries to claim the reserved id', async () => {

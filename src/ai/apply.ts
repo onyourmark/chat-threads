@@ -7,11 +7,10 @@
  */
 
 import type { Topic } from '../model/types';
-import { SHARED } from '../model/types';
 import { BUILT_IN_TOPIC_MODEL_ID } from '../model/default-topic';
 import { topicIdFromModelId } from './prompt';
 import { setAssignments, setTopics, type WorkingState } from '../operations/working';
-import { SHARED_TOPIC, type TopicProposal } from './schema';
+import type { TopicProposal } from './schema';
 import type { AnalyzerConfig } from './types';
 import type { TopicAnalyzer } from './types';
 import { AnthropicAnalyzer } from './providers/anthropic';
@@ -53,34 +52,59 @@ export function applyProposal(
     })),
   ];
 
+  /**
+   * The internal topic a model id refers to, or null if it refers to nothing.
+   *
+   * A reserved id names a topic that already existed; if the user removed it
+   * while the request was in flight there is nothing to assign to, and the
+   * turn is left alone rather than the topic being resurrected behind them.
+   */
+  const topicFor = (modelId: string): string | null => {
+    if (modelId === BUILT_IN_TOPIC_MODEL_ID) return builtIn?.id ?? null;
+    const keptId = topicIdFromModelId(modelId);
+    if (keptId !== null) return keptById.get(keptId)?.id ?? null;
+    return idFor(modelId);
+  };
+
+  /*
+    A model may list one turn under two topics, which is how it says the turn
+    belongs to both. The first becomes the turn's assignment and the rest its
+    further topics — a real membership in two topics out of fifteen, rather
+    than Shared, which would put it in all fifteen. `validateTopicProposal`
+    refuses Shared from a model outright, so nothing here can produce it.
+  */
   const bySequence = new Map(state.turns.map((t) => [t.sequence, t.id]));
-  const updates = proposal.assignments.flatMap((a) => {
+  const byTurn = new Map<
+    string,
+    { turnId: string; assignment: string; alsoIn: string[]; uncertain: boolean }
+  >();
+
+  for (const a of proposal.assignments) {
     const turnId = bySequence.get(a.turn);
-    if (!turnId) return [];
+    if (!turnId) continue;
+    const topicId = topicFor(a.topic);
+    if (topicId === null) continue;
 
-    // The model refers to a topic that already existed by a reserved id. If
-    // the user has removed that topic since the request went out, there is
-    // nothing to assign to, so the turn is left where it was rather than the
-    // topic being resurrected behind their back.
-    if (a.topic === BUILT_IN_TOPIC_MODEL_ID) {
-      if (!builtIn) return [];
-      return [{ turnId, assignment: builtIn.id, uncertain: a.uncertain }];
-    }
-    const keptId = topicIdFromModelId(a.topic);
-    if (keptId !== null) {
-      const topic = keptById.get(keptId);
-      if (!topic) return [];
-      return [{ turnId, assignment: topic.id, uncertain: a.uncertain }];
-    }
-
-    return [
-      {
+    const existing = byTurn.get(turnId);
+    if (!existing) {
+      byTurn.set(turnId, {
         turnId,
-        assignment: a.topic === SHARED_TOPIC ? SHARED : idFor(a.topic),
+        assignment: topicId,
+        alsoIn: [],
         uncertain: a.uncertain,
-      },
-    ];
-  });
+      });
+      continue;
+    }
+    if (existing.assignment === topicId || existing.alsoIn.includes(topicId)) {
+      continue;
+    }
+    existing.alsoIn.push(topicId);
+    // Belonging to two topics is a judgement, so the turn keeps any doubt the
+    // model expressed about either of them.
+    existing.uncertain = existing.uncertain || a.uncertain;
+  }
+
+  const updates = [...byTurn.values()];
 
   // Topics first: `setTopics` clears assignments that name a topic that no
   // longer exists, and the new assignments must be written after that.

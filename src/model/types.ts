@@ -65,13 +65,17 @@ export const UNASSIGNED = 'unassigned';
 export const SHARED = 'shared';
 
 /**
- * A turn's topic assignment.
- * - a topic id  -> appears only in that topic's transcript
+ * A turn's primary topic assignment.
+ * - a topic id  -> appears in that topic's transcript
  * - SHARED      -> appears in every topic transcript (documented in README)
  * - UNASSIGNED  -> appears in no topic transcript (but still in "Cleaned")
  *
  * Exclusion is deliberately not an assignment: it lives on `Turn.included`, so
  * a turn keeps its topic if the user re-includes it.
+ *
+ * A turn can belong to more than one topic without belonging to all of them —
+ * see `Turn.alsoIn`. SHARED is the far stronger claim of "every topic", and is
+ * reserved for a person deciding that deliberately.
  */
 export type TopicAssignment = string;
 
@@ -129,6 +133,20 @@ export interface Turn {
   /** False means: leave this turn out of every generated transcript. */
   included: boolean;
   assignment: TopicAssignment;
+  /**
+   * Further topics this turn belongs to, beyond `assignment`.
+   *
+   * A conversation really does contain turns that belong to two subjects at
+   * once, and the honest answer is to put them in both. Before this existed
+   * the only way to say "more than one" was SHARED — every topic — and a
+   * suggestion that reached for it a few hundred times turned every exported
+   * topic file into most of the conversation. Membership in two topics out of
+   * fifteen is now expressible as exactly that.
+   *
+   * Never contains `assignment`, never contains SHARED or UNASSIGNED, and
+   * never names a topic that no longer exists.
+   */
+  alsoIn: readonly string[];
   /** True once `workingText` differs from `originalText`. */
   edited: boolean;
   /** True when an AI proposal flagged this turn's assignment as uncertain. */

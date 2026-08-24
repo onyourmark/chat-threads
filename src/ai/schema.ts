@@ -18,7 +18,7 @@ export interface ProposedTopic {
 export interface ProposedAssignment {
   /** The turn's sequence number, as given to the model. */
   turn: number;
-  /** A topic id from the same proposal, or the literal 'shared'. */
+  /** A topic id from the same proposal. Never 'shared' — see below. */
   topic: string;
   /** The model's own flag that it was not confident. */
   uncertain: boolean;
@@ -93,7 +93,7 @@ export const TOPIC_PROPOSAL_SCHEMA = {
           topic: {
             type: 'string',
             description:
-              'A topic id from "topics", or "shared" when the turn belongs to every topic.',
+              'A topic id from "topics". To put one turn in two topics, list it twice, once for each.',
           },
           uncertain: {
             type: 'boolean',
@@ -218,6 +218,12 @@ export function validateTopicProposal(
   let unknownTopicCount = 0;
   let unknownTurnCount = 0;
 
+  // One turn may be listed more than once, which is how a model says "this
+  // belongs to both of these". The same pair twice is a repetition, not a
+  // second membership, and is dropped.
+  const pairs = new Set<string>();
+  let sharedRefused = 0;
+
   for (const a of rawAssignments) {
     if (!isRecord(a)) continue;
     const turn = a.turn;
@@ -226,12 +232,23 @@ export function validateTopicProposal(
       unknownTurnCount += 1;
       continue;
     }
-    if (placed.has(turn)) continue; // first assignment wins
     const topic = typeof a.topic === 'string' ? cleanText(a.topic, 64) : '';
-    if (topic !== SHARED_TOPIC && !seenIds.has(topic) && !reserved.has(topic)) {
+
+    // "Shared" means every topic, and a model reaching for it as a way of
+    // saying "several" or "not sure" turns each exported topic into most of
+    // the conversation. It is a decision for a person, so it is refused here
+    // and the turn is simply left for them to place.
+    if (topic === SHARED_TOPIC) {
+      sharedRefused += 1;
+      continue;
+    }
+    if (!seenIds.has(topic) && !reserved.has(topic)) {
       unknownTopicCount += 1;
       continue;
     }
+    const pair = JSON.stringify([turn, topic]);
+    if (pairs.has(pair)) continue;
+    pairs.add(pair);
     placed.add(turn);
     assignments.push({ turn, topic, uncertain: a.uncertain === true });
   }
@@ -250,6 +267,11 @@ export function validateTopicProposal(
   if (unknownTurnCount > 0) {
     notes.push(
       `${unknownTurnCount} assignment${unknownTurnCount === 1 ? '' : 's'} referred to a turn that does not exist and ${unknownTurnCount === 1 ? 'was' : 'were'} ignored.`,
+    );
+  }
+  if (sharedRefused > 0) {
+    notes.push(
+      `${sharedRefused} turn${sharedRefused === 1 ? '' : 's'} ${sharedRefused === 1 ? 'was' : 'were'} suggested as Shared, which would put ${sharedRefused === 1 ? 'it' : 'them'} in every topic. Shared is yours to set, so ${sharedRefused === 1 ? 'it was' : 'they were'} left unassigned instead.`,
     );
   }
   if (unknownTopicCount > 0) {

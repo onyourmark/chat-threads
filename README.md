@@ -178,6 +178,7 @@ table:
 | Exclude and restore | Leave a turn out of the result, put it back at any time |
 | Edit working copies | Change a turn's text; the original is kept so you can compare and restore |
 | Manual topic splitting | Any number of topics, editable names, per-turn assignment, plus Shared and Unassigned |
+| A turn in more than one topic | Add a turn to a second topic and it appears in both, and in no others — without the all-or-nothing of Shared |
 | One topic made for you | "Why is AI so stupid?" — for turns spent cursing at, arguing with or venting at the AI. Rename it, remove it, or ignore it |
 | Review a topic and cut it | Open any topic on its own, tick the turns that really belong, and take them out of the cleaned conversation in one go |
 | Optional AI topic suggestions | Bring your own API key; nothing is sent until you press the button |
@@ -350,19 +351,30 @@ unrelated turns to fill it.
 Your own topics survive a re-run. Topics from a previous suggestion do not —
 pressing the button again is how you ask for a different answer.
 
-### When a turn could go in two topics
+### When a turn belongs to two topics
 
-Every turn gets exactly one topic. When a turn could reasonably belong to two,
-the model is told to file it with the topic it *moves forward*, and to mark it
-**Unsure** — which shows as a badge in Split, so the turns worth a second look
-are the ones flagged. Change any of them with the dropdown; a turn you have
-moved yourself is marked **Your choice** and is never overwritten by a later
-suggestion.
+Put it in both. A turn has one topic in the **Goes to** dropdown and can be
+added to others with **Add to**; the extra ones show as chips you can click to
+remove. It then appears once in each of those topics' conversations, and in no
+others. Find Topics does the same thing — a turn it thinks belongs to two
+topics is put in exactly those two.
 
-**Shared** is a different thing, and deliberately strict: it means the turn
-belongs with *every* topic — an opening instruction, say — and puts a copy in
-each. A turn that belongs to two topics out of fifteen is not shared; it goes
-in one, flagged.
+When it is genuinely a judgement call rather than real dual membership, the
+model files the turn in one topic and marks it **Unsure**, which shows as a
+badge in Split so the turns worth a second look are the flagged ones. A turn
+you have moved yourself is marked **Your choice** and is never overwritten by a
+later suggestion.
+
+**Shared** is a much stronger thing, and is yours alone to set: it means the
+turn belongs with *every* topic — an opening instruction, say — and puts a full
+copy in each of them. Find Topics is not allowed to use it. It used to be, and
+on a 876-turn conversation it reached for Shared several hundred times as a way
+of saying "not sure", which made every exported topic file about two thirds of
+the whole conversation. Ambiguity is now expressed by marking a turn Unsure, or
+by putting it in the two topics it actually belongs to.
+
+The count beside a topic shows exactly what its conversation will contain: its
+own turns, and separately how many Shared turns will be added to every topic.
 
 ### Find where a chat was branched
 

@@ -8,8 +8,12 @@
  */
 
 import type { Turn } from '../model/types';
-import { SHARED, UNASSIGNED } from '../model/types';
-import type { WorkingState } from './working';
+import { UNASSIGNED } from '../model/types';
+import {
+  belongsTo,
+  sharedTurns,
+  type WorkingState,
+} from './working';
 
 export type GeneratedKind = 'cleaned' | 'topic';
 
@@ -25,6 +29,13 @@ export interface GeneratedConversation {
   topicName?: string;
   /** Selected turns in chronological order, carrying their working text. */
   turns: readonly Turn[];
+  /**
+   * How many of `turns` this topic owns, and how many arrived because a person
+   * marked them Shared. Split shows both, so the number beside a topic and the
+   * size of its exported file can never tell different stories.
+   */
+  ownTurnCount?: number;
+  sharedTurnCount?: number;
 }
 
 /** The default continuation instruction, offered as an option. */
@@ -61,22 +72,45 @@ export function generateCleaned(state: WorkingState): GeneratedConversation {
 }
 
 /**
+ * The turns one topic owns, in conversation order.
+ *
+ * Own, precisely: assigned to it, or listed among the turn's further topics.
+ * Not Shared — a shared turn reaches every topic transcript, but it is not
+ * *about* any of them, and treating the two as the same thing is what let a
+ * topic with nothing of its own export most of the conversation.
+ *
+ * Every turn appears at most once: the source list holds each turn once and
+ * this only filters it.
+ */
+export function topicOwnTurns(state: WorkingState, topicId: string): Turn[] {
+  return includedTurns(state).filter((t) => belongsTo(t, topicId));
+}
+
+/**
  * One conversation per topic.
  *
  * Selection rule, also documented in the README:
- *  - a turn assigned to topic X appears in topic X only;
- *  - a turn marked Shared appears in full in *every* topic conversation;
+ *  - a turn assigned to topic X appears in topic X;
+ *  - a turn that belongs to X and Y appears once in each, and nowhere else;
+ *  - a turn marked Shared appears in full in *every* topic conversation —
+ *    which is why only a person can mark one, never a suggestion;
  *  - a turn left Unassigned appears in none of them;
  *  - an excluded turn appears nowhere at all.
+ *
+ * This is the only place that decides what is in a topic. Preview, the single
+ * Download button and the bulk export all render whatever comes out of here,
+ * so there is no second selection rule that could disagree with the first.
  *
  * Topics with no turns of their own are still returned, so the user can see
  * that a topic came out empty rather than silently losing it.
  */
 export function generateSplit(state: WorkingState): GeneratedConversation[] {
-  const shared = includedTurns(state).filter((t) => t.assignment === SHARED);
+  const shared = sharedTurns(state);
 
   return state.topics.map((topic, i) => {
-    const own = includedTurns(state).filter((t) => t.assignment === topic.id);
+    const own = topicOwnTurns(state, topic.id);
+    // A shared turn is never also an owned turn — `belongsTo` ignores SHARED —
+    // so concatenating cannot repeat one.
     const turns = [...own, ...shared].sort((a, b) => a.sequence - b.sequence);
     return {
       id: topic.id,
@@ -85,13 +119,17 @@ export function generateSplit(state: WorkingState): GeneratedConversation[] {
       topicId: topic.id,
       topicName: topic.name,
       turns,
+      ownTurnCount: own.length,
+      sharedTurnCount: shared.length,
     };
   });
 }
 
 /** Turns that would not reach any generated topic conversation. */
 export function unassignedIncludedTurns(state: WorkingState): Turn[] {
-  return includedTurns(state).filter((t) => t.assignment === UNASSIGNED);
+  return includedTurns(state).filter(
+    (t) => t.assignment === UNASSIGNED && t.alsoIn.length === 0,
+  );
 }
 
 function speaker(turn: Turn): string {

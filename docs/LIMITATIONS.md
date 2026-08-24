@@ -247,6 +247,15 @@ regenerations exactly as ChatGPT's does, but it has no "branch into a new chat"
 feature and records nothing linking one conversation to another. Chat Threads
 reports that as unsupported rather than as "no branches found".
 
+**Shared is all-or-nothing, and only you can set it.** A Shared turn is copied
+into every topic conversation, so a handful of them adds a handful of turns to
+every exported file. That is what it is for — an instruction that applies
+throughout — but it is easy to over-use. Find Topics is not permitted to mark
+anything Shared: on a real 876-turn conversation it used Shared several hundred
+times as a way of saying "not sure", and every exported topic file came out at
+roughly two thirds of the whole conversation. A turn belonging to two topics
+goes in those two instead.
+
 **A long conversation makes the panel work hard.** Several hundred turns is
 several hundred cards, each with a dropdown of every topic. Off-screen cards
 are left undrawn (`content-visibility`), and typing a topic name no longer

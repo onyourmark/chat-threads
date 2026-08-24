@@ -574,6 +574,30 @@ to check.
 4. Zoom the ChatGPT page itself in and out. **Expect:** the panel is
    unaffected, which is why it has its own control.
 
+### 15f. Topic membership and export sizes
+
+The shortest check that the 24 August export bug is gone.
+
+1. Run **Find Topics** on a long conversation, or assign a handful of turns to
+   two or three topics by hand.
+2. In **Split**, read the count beside each topic. **Expect:** they add up to
+   roughly the number of turns you assigned — not to the whole conversation.
+   If any turns are Shared, the count says so separately: `23 turns + 4 shared`.
+3. Open **Output** and press **Download .zip**.
+4. Compare the file sizes. **Expect:** each topic file is a fraction of
+   `Cleaned Conversation.md`, and the fractions differ from one another.
+   **A set of topic files that are all roughly the same size, and all close to
+   the cleaned file, is the bug.**
+5. Open two topic files. **Expect:** different content, not the same
+   conversation twice.
+6. **Expect:** no `Why is AI so stupid.md` in the zip unless you actually put
+   turns in that topic.
+7. Put one turn in two topics: choose a topic in **Goes to**, then pick another
+   in **Add to**. **Expect:** a chip naming the second topic, both counts go up
+   by one, and after exporting the turn is in both files and no others.
+8. Set one turn to **Shared** by hand. **Expect:** Output says "1 Shared turn
+   will appear in every topic conversation", and it does.
+
 ## 16. Failure behaviour
 
 1. Sign out of ChatGPT in another tab, then reload the panel on a conversation.
