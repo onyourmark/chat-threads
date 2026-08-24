@@ -19,6 +19,7 @@ import type {
   TurnReference,
 } from '../../model/types';
 import { normalizeChatGptReferences } from './references';
+import { detectChatGptBranches } from './branch-metadata';
 
 /**
  * Content types that are part of the conversation the user can see.
@@ -241,26 +242,45 @@ export function normalizeChatGptConversation(
   let unknownSkipped = 0;
   const unknownTypes = new Set<string>();
 
+  // Built alongside the turns so a branch marker can be tied back to the turn
+  // it belongs to. `lastVisibleSequence` advances only when a turn is actually
+  // emitted, which is what lets a marker on a hidden provider node resolve to
+  // the visible turn before it instead of being lost.
+  const sequenceByMessageId = new Map<string, number>();
+  const lastVisibleSequenceByNodeId = new Map<string, number>();
+  let lastVisibleSequence: number | undefined;
+
   for (const node of branch.path) {
     const extracted = extractMessage(node.raw);
-    if (!extracted) continue;
-    if (extracted.skipped === 'unknown') {
+    const emit =
+      extracted !== null &&
+      extracted.skipped === undefined &&
+      (extracted.text !== '' || extracted.attachments.length > 0);
+
+    if (emit) {
+      const sequence = raw.length;
+      if (extracted.messageId) {
+        sequenceByMessageId.set(extracted.messageId, sequence);
+      }
+      lastVisibleSequence = sequence;
+
+      raw.push({
+        role: extracted.role,
+        text: extracted.text,
+        providerMessageId: extracted.messageId,
+        parentMessageId: node.parentId ?? undefined,
+        timestamp: extracted.timestamp,
+        attachments: extracted.attachments,
+        references: extracted.references,
+      });
+    } else if (extracted?.skipped === 'unknown') {
       unknownSkipped += 1;
       if (extracted.unknownType) unknownTypes.add(extracted.unknownType);
-      continue;
     }
-    if (extracted.skipped) continue;
-    if (!extracted.text && extracted.attachments.length === 0) continue;
 
-    raw.push({
-      role: extracted.role,
-      text: extracted.text,
-      providerMessageId: extracted.messageId,
-      parentMessageId: node.parentId ?? undefined,
-      timestamp: extracted.timestamp,
-      attachments: extracted.attachments,
-      references: extracted.references,
-    });
+    if (lastVisibleSequence !== undefined) {
+      lastVisibleSequenceByNodeId.set(node.id, lastVisibleSequence);
+    }
   }
 
   if (unknownSkipped > 0) {
@@ -292,6 +312,14 @@ export function normalizeChatGptConversation(
     warnings,
   };
 
+  // Read only; nothing about branch detection leaves the machine, and it runs
+  // whether or not the user has ever configured Find Topics.
+  const branches = detectChatGptBranches({
+    path: branch.path,
+    sequenceByMessageId,
+    lastVisibleSequenceByNodeId,
+  });
+
   return {
     provider: 'chatgpt',
     conversationId,
@@ -300,6 +328,7 @@ export function normalizeChatGptConversation(
     createdAt: epochToIso(payload.create_time),
     turns: buildTurns('chatgpt', conversationId, raw),
     retrieval,
+    branches,
   };
 }
 

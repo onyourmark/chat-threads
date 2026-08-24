@@ -16,6 +16,7 @@
 import { buildTurns, freezeConversation } from '../../src/model/conversation';
 import type { RawTurnInput } from '../../src/model/conversation';
 import type { Role, SourceConversation } from '../../src/model/types';
+import { noBranches, type BranchInfo } from '../../src/model/branch';
 import {
   createWorkingState,
   type WorkingState,
@@ -45,6 +46,8 @@ export interface LongConversationOptions {
   title?: string;
   /** Repeat the same role this many times in a row, to test odd runs. */
   roleAt?: (index: number) => Role;
+  /** Branch information to attach, for the branch-navigation tests. */
+  branches?: BranchInfo;
 }
 
 /** Filler that reads like prose rather than a run of one character. */
@@ -82,6 +85,7 @@ export function buildLongConversation(
       detail: 'Synthetic fixture.',
       warnings: [],
     },
+    branches: options.branches ?? noBranches(),
   });
 
   return createWorkingState(source);

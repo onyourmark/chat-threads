@@ -15,13 +15,21 @@ import {
   type WorkingState,
 } from '../../operations/working';
 import { TurnCard } from './TurnCard';
+import {
+  branchPointSequences,
+  focusFor,
+  type TurnFocus,
+} from '../branch-view';
 
 interface Props {
   state: WorkingState;
   onChange: (next: WorkingState) => void;
+  /** The turn the panel has been asked to show, if any. */
+  focus?: TurnFocus | null;
 }
 
-export function CleanView({ state, onChange }: Props) {
+export function CleanView({ state, onChange, focus = null }: Props) {
+  const branchPoints = branchPointSequences(state.source.branches);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [showOriginalId, setShowOriginalId] = useState<string | null>(null);
@@ -56,6 +64,8 @@ export function CleanView({ state, onChange }: Props) {
             turn={turn}
             displayNumber={i + 1}
             collapsible={!editing}
+            branchPoint={branchPoints.has(turn.sequence)}
+            focus={focusFor(focus, turn)}
             actions={
               <>
                 <button

@@ -11,6 +11,7 @@
 
 import { activeBranch, type BranchNode } from '../branch';
 import { buildTurns, type RawTurnInput } from '../../model/conversation';
+import { unsupportedBranches } from '../../model/branch';
 import type {
   Attachment,
   Role,
@@ -247,5 +248,13 @@ export function normalizeClaudeConversation(
           : 'Loaded from Claude’s own conversation data, but Chat Threads could not confirm it is complete.',
       warnings,
     },
+    // Claude's conversation tree forks for edits and regenerations, exactly as
+    // ChatGPT's does, but it has no equivalent of "Branch in new chat" and
+    // records nothing that ties one conversation to another. Saying so is not
+    // the same as saying this conversation has no branches, and the panel
+    // shows the two differently.
+    branches: unsupportedBranches(
+      'Claude does not record where a conversation was branched from, so Chat Threads cannot find a branch point in a Claude chat.',
+    ),
   };
 }

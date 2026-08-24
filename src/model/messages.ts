@@ -7,6 +7,13 @@
  * as untrusted input just like conversation text is.
  */
 
+import {
+  undeterminedBranches,
+  type BranchConfidence,
+  type BranchInfo,
+  type BranchPoint,
+  type BranchStatus,
+} from './branch';
 import type {
   AdapterFailureCode,
   AdapterResult,
@@ -166,6 +173,71 @@ export function parseAdapterResult(v: unknown): AdapterResult | null {
   return { ok: true, conversation };
 }
 
+const BRANCH_STATUSES: BranchStatus[] = [
+  'unsupported',
+  'none',
+  'found',
+  'indeterminate',
+];
+const BRANCH_CONFIDENCES: BranchConfidence[] = [
+  'confirmed',
+  'probable',
+  'ambiguous',
+];
+
+/**
+ * Rebuild branch information sent across the extension boundary.
+ *
+ * Checked as strictly as everything else here. An absent or unrecognisable
+ * value becomes `indeterminate` rather than `none`: "we did not find a branch"
+ * and "we could not tell" are different answers, and only one of them is safe
+ * to give when the message did not say.
+ */
+function parseBranchInfo(v: unknown): BranchInfo {
+  if (!isRecord(v) || !BRANCH_STATUSES.includes(v.status as BranchStatus)) {
+    return undeterminedBranches(
+      'Chat Threads could not read the branch information for this conversation.',
+    );
+  }
+  const status = v.status as BranchStatus;
+  const points: BranchPoint[] = Array.isArray(v.points)
+    ? v.points.flatMap((p: unknown) => {
+        if (!isRecord(p)) return [];
+        if (p.kind !== 'new-chat-branch') return [];
+        const confidence = BRANCH_CONFIDENCES.includes(
+          p.confidence as BranchConfidence,
+        )
+          ? (p.confidence as BranchConfidence)
+          : 'ambiguous';
+        const turnSequence =
+          typeof p.turnSequence === 'number' && Number.isInteger(p.turnSequence)
+            ? p.turnSequence
+            : undefined;
+        return [
+          {
+            kind: 'new-chat-branch' as const,
+            branchFromMessageId: optString(p.branchFromMessageId),
+            turnSequence,
+            sourceConversationId: optString(p.sourceConversationId),
+            sourceConversationTitle: optString(p.sourceConversationTitle),
+            sourceConversationOwner: optString(p.sourceConversationOwner),
+            timestamp: optString(p.timestamp),
+            confidence,
+            detail: isString(p.detail) ? p.detail : '',
+          },
+        ];
+      })
+    : [];
+
+  // A 'found' with nothing in it is not a finding.
+  if (status === 'found' && points.length === 0) {
+    return undeterminedBranches(
+      'Chat Threads could not read the branch information for this conversation.',
+    );
+  }
+  return { status, points, detail: optString(v.detail) };
+}
+
 /** Validate and rebuild a `SourceConversation`, dropping anything unexpected. */
 export function parseSourceConversation(v: unknown): SourceConversation | null {
   if (!isRecord(v)) return null;
@@ -244,6 +316,7 @@ export function parseSourceConversation(v: unknown): SourceConversation | null {
     url: v.url,
     createdAt: optString(v.createdAt),
     turns,
+    branches: parseBranchInfo(v.branches),
     retrieval: {
       completeness,
       method: isString(r.method) ? r.method : 'unknown',

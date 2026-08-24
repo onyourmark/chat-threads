@@ -9,6 +9,7 @@
  */
 
 import { buildTurns, type RawTurnInput } from '../../model/conversation';
+import { undeterminedBranches } from '../../model/branch';
 import type { Role, SourceConversation } from '../../model/types';
 
 /** Read the visible transcript out of a rendered ChatGPT page. */
@@ -52,6 +53,13 @@ export function extractChatGptDom(
         'Turns that ChatGPT had not rendered yet are missing. Scroll through the whole conversation and load again, or reload the page.',
       ],
     },
+    // The page shows a branch notice, but not the data behind it: branch
+    // metadata lives in the conversation payload, which is exactly what
+    // this fallback could not load. Reporting "none" here would be a
+    // claim we never checked.
+    branches: undeterminedBranches(
+      'This conversation was read from the page, which does not carry branch information. Load it from ChatGPT’s own conversation data to look for a branch point.',
+    ),
   };
 }
 

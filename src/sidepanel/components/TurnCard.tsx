@@ -6,7 +6,7 @@
  * code block containing HTML or a script tag — can execute here.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Turn } from '../../model/types';
 import { formatTimestamp } from '../../model/conversation';
 
@@ -21,6 +21,18 @@ interface Props {
   actions?: React.ReactNode;
   /** Badges rendered in the header, after the role. */
   badges?: React.ReactNode;
+  /** True when a new chat was branched out of this turn. */
+  branchPoint?: boolean;
+  /**
+   * Changes to a new number when the panel is asked to go to this turn.
+   *
+   * A number rather than a boolean because the user can press "Go to branch
+   * point" twice: a boolean would already be true the second time and nothing
+   * would happen. Scrolling is done here, by the card that knows where it is,
+   * so it works the same in every view and in a conversation of any length —
+   * the whole list is rendered, so the turn is always a real element.
+   */
+  focus?: number | null;
 }
 
 export function TurnCard({
@@ -30,8 +42,20 @@ export function TurnCard({
   children,
   actions,
   badges,
+  branchPoint = false,
+  focus = null,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (focus === null) return;
+    ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setFlash(true);
+    const timer = setTimeout(() => setFlash(false), 2400);
+    return () => clearTimeout(timer);
+  }, [focus]);
   const text = turn.workingText;
   // Only offer "Show more" when there is meaningfully more to show, so short
   // turns do not sprout a useless control.
@@ -41,10 +65,13 @@ export function TurnCard({
 
   return (
     <article
+      ref={ref}
       className={[
         'turn',
         turn.role === 'assistant' ? 'assistant' : 'user',
         turn.included ? '' : 'excluded',
+        branchPoint ? 'branch' : '',
+        flash ? 'flash' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -55,6 +82,11 @@ export function TurnCard({
         </span>
         <span className="turn-num">Turn {displayNumber}</span>
         {time && <span>{time}</span>}
+        {branchPoint && (
+          <span className="badge branch" title="A new chat was branched from this turn">
+            Branch point
+          </span>
+        )}
         {turn.edited && <span className="badge edited">Edited</span>}
         {!turn.included && <span className="badge excluded">Excluded</span>}
         {badges}

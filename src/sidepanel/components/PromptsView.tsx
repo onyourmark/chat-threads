@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import type { WorkingState } from '../../operations/working';
 import { TurnCard } from './TurnCard';
+import { branchPointSequences } from '../branch-view';
 
 interface Props {
   state: WorkingState;
@@ -16,6 +17,7 @@ interface Props {
 
 export function PromptsView({ state }: Props) {
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
+  const branchPoints = branchPointSequences(state.source.branches);
   const prompts = state.turns.filter((t) => t.role === 'user');
 
   if (prompts.length === 0) {
@@ -49,6 +51,7 @@ export function PromptsView({ state }: Props) {
             key={turn.id}
             turn={turn}
             displayNumber={i + 1}
+            branchPoint={branchPoints.has(turn.sequence)}
             actions={
               reply ? (
                 <button

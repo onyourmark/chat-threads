@@ -6,6 +6,8 @@
  * stay behind the adapter's normalize step.
  */
 
+import type { BranchInfo } from './branch';
+
 /** Identifier of a supported provider. Adding a provider adds a member here. */
 export type ProviderId = 'chatgpt' | 'claude';
 
@@ -170,6 +172,14 @@ export interface SourceConversation {
   createdAt?: string;
   turns: readonly Turn[];
   retrieval: RetrievalStatus;
+  /**
+   * Where this conversation was branched from, when the provider says.
+   *
+   * Required rather than optional, so that an adapter has to state its
+   * position: a provider with no notion of branching says `unsupported`, and
+   * is never mistaken for one that looked and found nothing.
+   */
+  branches: BranchInfo;
 }
 
 /** Machine-readable reason an adapter could not produce a conversation. */

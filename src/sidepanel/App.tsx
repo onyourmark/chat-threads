@@ -47,6 +47,8 @@ import { CleanView } from './components/CleanView';
 import { OutputView } from './components/OutputView';
 import { PromptsView } from './components/PromptsView';
 import { SplitView } from './components/SplitView';
+import { BranchBanner } from './components/BranchBanner';
+import type { TurnFocus } from './branch-view';
 
 type View = 'prompts' | 'clean' | 'split' | 'output';
 
@@ -64,6 +66,11 @@ export function App() {
   const [sessions, setSessions] = useState<Sessions>(() => new Map());
   const [busy, setBusy] = useState<Busy>({ kind: 'checking' });
   const [view, setView] = useState<View>('prompts');
+  /**
+   * The turn the panel has been asked to scroll to, and a nonce so that asking
+   * for the same turn twice scrolls twice.
+   */
+  const [focus, setFocus] = useState<TurnFocus | null>(null);
 
   /**
    * The invocation we have already acted on. A click on the toolbar icon moves
@@ -221,6 +228,18 @@ export function App() {
     [],
   );
 
+  /**
+   * Show one turn.
+   *
+   * Switches to Clean first, because that is the only view that shows every
+   * turn in order — Prompts hides assistant replies, and a branch point can be
+   * either role. The scrolling itself is done by the turn card.
+   */
+  const goToTurn = useCallback((turnId: string) => {
+    setView('clean');
+    setFocus((prev) => ({ turnId, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+
   const busyForTarget =
     busy.kind !== 'idle' &&
     busy.kind !== 'checking' &&
@@ -273,6 +292,10 @@ export function App() {
             </button>
           ))}
         </nav>
+      )}
+
+      {session && (
+        <BranchBanner state={session.working} onGoToTurn={goToTurn} />
       )}
 
       <main className="scroll">
@@ -363,6 +386,7 @@ export function App() {
               <CleanView
                 state={session.working}
                 onChange={(next) => changeSession(session.key, next)}
+                focus={focus}
               />
             )}
             {view === 'split' && (
@@ -378,6 +402,7 @@ export function App() {
                     setProposalNotes(prev, session.key, null),
                   )
                 }
+                focus={focus}
               />
             )}
             {view === 'output' && <OutputView state={session.working} />}

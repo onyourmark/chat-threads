@@ -81,3 +81,28 @@ describe('Claude DOM fallback', () => {
     expect(c.turns).toHaveLength(0);
   });
 });
+
+/**
+ * Branch metadata lives in the provider's conversation payload, which is
+ * exactly what this fallback could not load. "We did not find a branch" would
+ * be a claim about something never looked at.
+ */
+describe('branch information after a DOM fallback', () => {
+  it('says it could not be determined, not that there is none', () => {
+    const chatgpt = extractChatGptDom(
+      documentFrom(
+        '<article data-message-author-role="user" data-message-id="m1">Hi</article>',
+      ),
+      'https://chatgpt.com/c/abc',
+    );
+    expect(chatgpt.branches.status).toBe('indeterminate');
+    expect(chatgpt.branches.points).toEqual([]);
+    expect(chatgpt.branches.detail).toMatch(/read from the page/i);
+
+    const claude = extractClaudeDom(
+      documentFrom('<div class="font-claude-message">Hello.</div>'),
+      'https://claude.ai/chat/x',
+    );
+    expect(claude.branches.status).toBe('indeterminate');
+  });
+});

@@ -442,6 +442,62 @@ label {
 .badge.mine {
   color: var(--text-muted);
 }
+.badge.branch {
+  color: var(--accent);
+  border-color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------- branch --
+   Where a conversation was branched into a new chat. The banner sits under
+   the tabs rather than in the scrolling list, so "Go to branch point" stays
+   reachable no matter how far the user has scrolled.
+*/
+.branch-banner {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.branch-point .branch-excerpt {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.branch-point .branch-role {
+  color: var(--text);
+  font-weight: 600;
+}
+.branch-point .hint {
+  margin-top: 4px;
+}
+
+/* The turn the branch was taken from, and the flash after jumping to it. */
+.turn.branch {
+  border-left: 3px solid var(--accent);
+}
+.turn.flash {
+  animation: turn-flash 2.4s ease-out;
+}
+@keyframes turn-flash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn.flash {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
 
 .original {
   margin-top: 6px;

@@ -20,6 +20,11 @@ import {
   type WorkingState,
 } from '../../operations/working';
 import { TurnCard } from './TurnCard';
+import {
+  branchPointSequences,
+  focusFor,
+  type TurnFocus,
+} from '../branch-view';
 import { FindTopics } from './FindTopics';
 import { TopicReview } from './TopicReview';
 import type { TopicProposal } from '../../ai/schema';
@@ -34,6 +39,8 @@ interface Props {
   proposalNotes: readonly string[] | null;
   onProposal: (proposal: TopicProposal) => void;
   onClearNotes: () => void;
+  /** The turn the panel has been asked to show, if any. */
+  focus?: TurnFocus | null;
 }
 
 export function SplitView({
@@ -42,7 +49,9 @@ export function SplitView({
   proposalNotes,
   onProposal,
   onClearNotes,
+  focus = null,
 }: Props) {
+  const branchPoints = branchPointSequences(state.source.branches);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const hasProposal = state.topics.some((t) => t.fromProposal);
   const builtIn = state.topics.find((t) => t.builtIn);
@@ -174,6 +183,8 @@ export function SplitView({
           key={turn.id}
           turn={turn}
           displayNumber={i + 1}
+          branchPoint={branchPoints.has(turn.sequence)}
+          focus={focusFor(focus, turn)}
           badges={
             <>
               {turn.uncertain && (
