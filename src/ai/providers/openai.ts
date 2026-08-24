@@ -2,26 +2,27 @@
  * Topic analysis through the OpenAI Chat Completions API.
  *
  * Raw `fetch` for the same reason as the Anthropic analyzer: one optional
- * request does not justify an SDK bundle inside a side panel.
+ * feature does not justify an SDK bundle inside a side panel.
+ *
+ * This file does one thing — send a prompt and hand back the reply as text.
+ * What to ask, how many times to ask it for a long conversation, and how to
+ * read the answer all live above it, in `run.ts`, so the behaviour is the same
+ * whichever provider the user chose.
  *
  * The key is supplied by the user, sent only to api.openai.com, and only when
  * the user presses Find Topics and confirms.
  */
 
-import { parseModelJson, validateTopicProposal } from '../schema';
-import { buildUserPrompt, reservedTopicIds, SYSTEM_PROMPT } from '../prompt';
-import type {
-  AnalysisInput,
-  AnalyzeOptions,
-  AnalyzerResult,
-  TopicAnalyzer,
-} from '../types';
+import { BaseAnalyzer } from '../analyzer';
+import { describeHttpFailure, readErrorBody } from './errors';
+import type { AnalyzeOptions, ModelRequest, ModelResult } from '../types';
 
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+const PROVIDER = 'OpenAI';
 
-export class OpenAiAnalyzer implements TopicAnalyzer {
+export class OpenAiAnalyzer extends BaseAnalyzer {
   readonly id = 'openai';
-  readonly label = 'OpenAI';
+  readonly label = PROVIDER;
   readonly endpointOrigin = 'https://api.openai.com';
 
   /**
@@ -33,14 +34,15 @@ export class OpenAiAnalyzer implements TopicAnalyzer {
   readonly #model: string;
 
   constructor(apiKey: string, model: string) {
+    super();
     this.#apiKey = apiKey;
     this.#model = model;
   }
 
-  async analyze(
-    input: AnalysisInput,
+  async complete(
+    request: ModelRequest,
     options: AnalyzeOptions = {},
-  ): Promise<AnalyzerResult> {
+  ): Promise<ModelResult> {
     let res: Response;
     try {
       res = await fetch(ENDPOINT, {
@@ -53,11 +55,13 @@ export class OpenAiAnalyzer implements TopicAnalyzer {
         body: JSON.stringify({
           model: this.#model,
           // JSON mode is supported far more widely than per-model schema
-          // enforcement, and the reply is validated here regardless.
+          // enforcement, and the reply is validated upstream regardless.
+          // No output cap is sent: Chat Completions has renamed that field
+          // once already, and naming the wrong one is a rejected request.
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildUserPrompt(input) },
+            { role: 'system', content: request.system },
+            { role: 'user', content: request.user },
           ],
         }),
       });
@@ -74,7 +78,11 @@ export class OpenAiAnalyzer implements TopicAnalyzer {
     }
 
     if (!res.ok) {
-      return { ok: false, errors: [describeHttpError(res.status)] };
+      const body = await readErrorBody(res);
+      return {
+        ok: false,
+        errors: [describeHttpFailure(PROVIDER, res.status, body)],
+      };
     }
 
     let body: unknown;
@@ -88,7 +96,7 @@ export class OpenAiAnalyzer implements TopicAnalyzer {
       return {
         ok: false,
         errors: [
-          'The model ran out of room before finishing. Try again, or split a very long conversation by hand.',
+          'The model ran out of room before finishing its reply. Try again, or exclude some turns.',
         ],
       };
     }
@@ -98,16 +106,7 @@ export class OpenAiAnalyzer implements TopicAnalyzer {
       return { ok: false, errors: ['The OpenAI API returned no text.'] };
     }
 
-    const parsed = parseModelJson(text);
-    if (parsed === null) {
-      return { ok: false, errors: ['The model did not return usable JSON.'] };
-    }
-
-    return validateTopicProposal(
-      parsed,
-      input.turns.map((t) => t.number),
-      reservedTopicIds(input),
-    );
+    return { ok: true, text };
   }
 }
 
@@ -133,20 +132,4 @@ function readText(body: unknown): string {
   if (typeof message !== 'object' || message === null) return '';
   const content = (message as Record<string, unknown>).content;
   return typeof content === 'string' ? content : '';
-}
-
-function describeHttpError(status: number): string {
-  if (status === 401 || status === 403) {
-    return 'The OpenAI API rejected that key.';
-  }
-  if (status === 429) {
-    return 'The OpenAI API is rate limiting this key, or the account is out of quota.';
-  }
-  if (status === 400 || status === 404) {
-    return 'The OpenAI API rejected the request. Check the model name.';
-  }
-  if (status >= 500) {
-    return 'The OpenAI API had a problem. Try again shortly.';
-  }
-  return `The OpenAI API returned an error (${status}).`;
 }

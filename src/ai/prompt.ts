@@ -121,12 +121,48 @@ export function buildUserPrompt(input: AnalysisInput): string {
   }
 
   lines.push('Here are the turns. Use the number shown for each one.', '');
+  lines.push(renderTurns(input.turns));
 
-  for (const t of input.turns) {
+  return lines.join('\n');
+}
+
+/**
+ * Render turns as the delimited blocks every stage uses.
+ *
+ * Kept in one place so that a section prompt and a whole-conversation prompt
+ * cannot drift apart and start describing the same turn two different ways.
+ */
+export function renderTurns(turns: readonly AnalysisTurn[]): string {
+  const lines: string[] = [];
+  for (const t of turns) {
     const speaker = t.role === 'user' ? 'User' : 'Assistant';
     const note = t.truncated ? ' (shortened)' : '';
     lines.push(`--- Turn ${t.number} — ${speaker}${note} ---`, t.text, '');
   }
+  return lines.join('\n');
+}
 
+/**
+ * Render the turns immediately before a section, as background only.
+ *
+ * The header deliberately differs from the one above. A turn shown for context
+ * is not a turn the model was asked to place, and the section validator
+ * refuses an assignment that names one — so improving a boundary decision
+ * cannot turn into the same turn being filed twice.
+ */
+export function renderContextTurns(turns: readonly AnalysisTurn[]): string {
+  if (turns.length === 0) return '';
+  const lines: string[] = [
+    'The turns just before this section, for background only. Do not assign them.',
+    '',
+  ];
+  for (const t of turns) {
+    const speaker = t.role === 'user' ? 'User' : 'Assistant';
+    lines.push(
+      `--- Earlier turn ${t.number} — ${speaker} (context only, do not assign) ---`,
+      t.text,
+      '',
+    );
+  }
   return lines.join('\n');
 }

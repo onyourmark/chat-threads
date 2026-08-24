@@ -5,13 +5,25 @@
  * after the user has entered a key, read what will be sent and to whom, and
  * pressed the button. Everything else in Chat Threads works with this section
  * left untouched.
+ *
+ * A long conversation cannot go out in one request, so it is sent in sections
+ * (see `ai/plan.ts`). That is planned before anything is sent, which is what
+ * lets this panel say how many requests the user is about to authorise rather
+ * than discovering it as they go — and what lets the button stay honest when a
+ * conversation is too long to analyse at all.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createAnalyzer } from '../../ai/apply';
 import type { TopicProposal } from '../../ai/schema';
 import { buildAnalysisInput, payloadSize } from '../../ai/prompt';
-import { DEFAULT_MODELS, PROVIDER_ORIGINS, type AnalyzerConfig } from '../../ai/types';
+import { planAnalysis } from '../../ai/plan';
+import {
+  DEFAULT_MODELS,
+  PROVIDER_ORIGINS,
+  type AnalysisProgress,
+  type AnalyzerConfig,
+} from '../../ai/types';
 import type { WorkingState } from '../../operations/working';
 import {
   clearApiKey,
@@ -40,15 +52,45 @@ interface Props {
 
 type Status =
   | { kind: 'idle' }
-  | { kind: 'working' }
+  | { kind: 'working'; progress: AnalysisProgress | null }
+  | { kind: 'cancelled' }
   | { kind: 'error'; errors: string[] }
   | { kind: 'done'; topics: number };
+
+/**
+ * What the panel says it is doing.
+ *
+ * Plain words on purpose: a person watching this should be able to tell that
+ * it is moving and roughly how far along it is, without being told anything
+ * about how the work is divided up internally.
+ */
+function progressText(progress: AnalysisProgress | null): string {
+  if (!progress) return 'Finding topics…';
+  switch (progress.phase) {
+    case 'single':
+      return 'Finding topics: asking the model…';
+    case 'discover':
+      return `Finding topics: reading section ${progress.section} of ${progress.sections}…`;
+    case 'merge':
+      return 'Finding topics: reconciling topics across the conversation…';
+    case 'classify':
+      return `Finding topics: sorting section ${progress.section} of ${progress.sections}…`;
+  }
+}
 
 export function FindTopics({ state, onProposal }: Props) {
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<AiPrefs>(DEFAULT_PREFS);
   const [apiKey, setApiKey] = useState('');
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+
+  /**
+   * Held in a ref rather than state so that pressing Stop reaches the run in
+   * flight. Deliberately not aborted when this component unmounts: switching
+   * tabs while an analysis runs must not cancel it, and the result is still
+   * applied to the conversation it was started on.
+   */
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     void loadPrefs().then(setPrefs);
@@ -60,25 +102,28 @@ export function FindTopics({ state, onProposal }: Props) {
     void savePrefs(next);
   };
 
-  const input = buildAnalysisInput(state);
+  const { input, plan } = useMemo(() => {
+    const built = buildAnalysisInput(state);
+    return { input: built, plan: planAnalysis(built) };
+  }, [state]);
   const characters = payloadSize(input);
+  const providerOrigin = PROVIDER_ORIGINS[prefs.providerId];
 
   const run = async () => {
     if (!apiKey.trim()) {
       setStatus({ kind: 'error', errors: ['Enter an API key first.'] });
       return;
     }
-    setStatus({ kind: 'working' });
+    setStatus({ kind: 'working', progress: null });
 
-    const origin = PROVIDER_ORIGINS[prefs.providerId];
     // Asked for here, inside the click, because Chrome only grants optional
     // permissions during a user gesture.
-    const granted = await ensureHostPermission(origin);
+    const granted = await ensureHostPermission(providerOrigin);
     if (!granted) {
       setStatus({
         kind: 'error',
         errors: [
-          `Chat Threads needs your permission to contact ${origin} before it can do this.`,
+          `Chat Threads needs your permission to contact ${providerOrigin} before it can do this.`,
         ],
       });
       return;
@@ -92,15 +137,29 @@ export function FindTopics({ state, onProposal }: Props) {
       model: prefs.model,
     };
 
-    const result = await createAnalyzer(config).analyze(input);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const result = await createAnalyzer(config).analyze(input, {
+      signal: controller.signal,
+      onProgress: (progress) => setStatus({ kind: 'working', progress }),
+    });
+    abortRef.current = null;
+
     if (!result.ok) {
-      setStatus({ kind: 'error', errors: result.errors });
+      setStatus(
+        controller.signal.aborted
+          ? { kind: 'cancelled' }
+          : { kind: 'error', errors: result.errors },
+      );
       return;
     }
 
     onProposal(result.proposal);
     setStatus({ kind: 'done', topics: result.proposal.topics.length });
   };
+
+  const working = status.kind === 'working';
 
   return (
     <section className="notice" style={{ marginBottom: 10 }}>
@@ -183,23 +242,52 @@ export function FindTopics({ state, onProposal }: Props) {
             When you press the button, Chat Threads sends the turns you have
             kept — about {characters.toLocaleString()} characters, shortened to
             the first 1,500 per turn — to{' '}
-            <strong>{PROVIDER_ORIGINS[prefs.providerId]}</strong> using your
-            key. Excluded turns and your edits-out are not sent. Nothing is sent
-            anywhere else, and nothing is sent until you press it.
+            <strong>{providerOrigin}</strong> using your key. Excluded turns and
+            your edits-out are not sent. Nothing is sent anywhere else, and
+            nothing is sent until you press it.
           </p>
+
+          {plan.mode === 'sections' && (
+            <p className="hint">
+              This conversation is too long for one request, so it goes in{' '}
+              {plan.sectionCount} sections — about {plan.requests} requests to
+              the same host, one after another, with nothing else in between.
+              You still get one set of topics for the whole conversation. It
+              will take a few minutes, and you can stop it at any time.
+            </p>
+          )}
+
+          {plan.mode === 'too-large' && (
+            <p className="hint">
+              This conversation is too long to analyse automatically: it would
+              take {plan.sectionCount} sections and about {plan.requests}{' '}
+              requests. Exclude some turns, or split it into topics by hand.
+            </p>
+          )}
 
           <div className="row" style={{ marginTop: 8 }}>
             <button
               type="button"
               className="btn primary"
               onClick={() => void run()}
-              disabled={status.kind === 'working' || input.turns.length === 0}
+              disabled={
+                working ||
+                input.turns.length === 0 ||
+                plan.mode === 'too-large'
+              }
             >
-              {status.kind === 'working'
-                ? 'Asking the model…'
-                : 'Send and find topics'}
+              {working ? 'Working…' : 'Send and find topics'}
             </button>
-            {apiKey && (
+            {working && (
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => abortRef.current?.abort()}
+              >
+                Stop
+              </button>
+            )}
+            {!working && apiKey && (
               <button
                 type="button"
                 className="btn small"
@@ -213,6 +301,16 @@ export function FindTopics({ state, onProposal }: Props) {
             )}
           </div>
 
+          {status.kind === 'working' && (
+            <div className="status" role="status" aria-live="polite">
+              {progressText(status.progress)}
+            </div>
+          )}
+          {status.kind === 'cancelled' && (
+            <div className="status" role="status">
+              Stopped. Nothing was changed.
+            </div>
+          )}
           {status.kind === 'error' && (
             <div className="status error" role="alert">
               {status.errors.map((e) => (

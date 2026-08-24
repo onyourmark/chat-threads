@@ -5,6 +5,11 @@
  * means writing one of these; it does not touch the UI, the conversation
  * model, or the validator.
  *
+ * A provider implements exactly one thing: `complete`, which sends one prompt
+ * and returns the reply as text. Everything above that — what to ask, how many
+ * times to ask it, how to read the answer — lives in `run.ts`, so that a long
+ * conversation is handled identically whichever provider the user picked.
+ *
  * Nothing in this layer runs unless the user presses Find Topics, and the
  * input it receives is built explicitly in `buildAnalysisInput` — no code path
  * hands a whole conversation object to a provider.
@@ -47,8 +52,46 @@ export type AnalyzerResult =
   | { ok: true; proposal: TopicProposal }
   | { ok: false; errors: string[] };
 
+/**
+ * Which step of a run a request belongs to.
+ *
+ * Providers do not need this — it never reaches the wire — but it makes a
+ * request self-describing, which the tests rely on and which lets a provider
+ * size a reply to the step if it ever needs to.
+ */
+export type AnalysisStage = 'single' | 'discover' | 'merge' | 'classify';
+
+/** One model call, as the orchestrator describes it to a provider. */
+export interface ModelRequest {
+  stage: AnalysisStage;
+  system: string;
+  user: string;
+  /** JSON Schema for structured output, where the provider supports it. */
+  schema?: unknown;
+  /** Upper bound on the reply, for providers that require one. */
+  maxOutputTokens: number;
+}
+
+/** The raw reply, or why there wasn't one. Never parsed by the provider. */
+export type ModelResult =
+  | { ok: true; text: string }
+  | { ok: false; errors: string[] };
+
+/**
+ * What the run is doing right now, for the progress line in the panel.
+ *
+ * Sections are numbered from 1 and counted for the user, not for the code:
+ * "section 3 of 15" is something a person can watch advance.
+ */
+export type AnalysisProgress =
+  | { phase: 'single' }
+  | { phase: 'discover'; section: number; sections: number }
+  | { phase: 'merge' }
+  | { phase: 'classify'; section: number; sections: number };
+
 export interface AnalyzeOptions {
   signal?: AbortSignal;
+  onProgress?: (progress: AnalysisProgress) => void;
 }
 
 export interface TopicAnalyzer {
@@ -56,6 +99,12 @@ export interface TopicAnalyzer {
   readonly label: string;
   /** The host the request goes to, shown to the user before they confirm. */
   readonly endpointOrigin: string;
+  /** One model call. This is the only thing a provider implements. */
+  complete(
+    request: ModelRequest,
+    options?: AnalyzeOptions,
+  ): Promise<ModelResult>;
+  /** A whole Find Topics run: one request, or many for a long conversation. */
   analyze(
     input: AnalysisInput,
     options?: AnalyzeOptions,

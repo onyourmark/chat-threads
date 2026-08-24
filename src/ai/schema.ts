@@ -118,7 +118,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Topic names are rendered as text, never as HTML, so this is belt-and-braces:
  * it keeps a model from smuggling newlines or terminal escapes into a label.
  */
-function cleanText(value: string, max: number): string {
+export function cleanText(value: string, max: number): string {
   // eslint-disable-next-line no-control-regex
   return value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 }
