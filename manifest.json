@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chat Threads",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reshape your AI conversations. Clean, edit and split long ChatGPT and Claude chats, then copy them into a new chat.",
   "minimum_chrome_version": "116",
   "icons": {

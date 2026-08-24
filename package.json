@@ -1,6 +1,6 @@
 {
   "name": "chat-threads",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Reshape your AI conversations. A Chrome extension for cleaning, editing, and splitting long ChatGPT and Claude conversations.",
   "license": "MIT",
