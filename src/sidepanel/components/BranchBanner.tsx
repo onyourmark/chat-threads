@@ -5,6 +5,20 @@
  * another one, this puts that fact where it can be acted on: which turn the
  * branch was taken from, what the turn says, and a button that goes there.
  *
+ * ## Why it is this small
+ *
+ * The first version said everything at once — turn number, a full excerpt, the
+ * whole source title, and a sentence explaining how the point was worked out.
+ * On a real 876-turn conversation that filled a large part of a side panel
+ * roughly 400px wide, and the Split workspace underneath was squeezed into
+ * almost nothing. Page zoom is no answer: this is its own document and does
+ * not shrink with the ChatGPT page.
+ *
+ * So the default is three short lines — number and button, one clamped line of
+ * the turn, one truncated line naming the source — and everything that is
+ * explanation rather than action sits behind Details. The button that does the
+ * thing the user came for is never behind the disclosure.
+ *
  * It renders nothing at all unless a branch was actually found. A conversation
  * that was never branched, a provider that cannot record branching, and a
  * transcript read from the page rather than from provider data all produce
@@ -13,6 +27,7 @@
  * places that need it.
  */
 
+import { useState } from 'react';
 import type { BranchPoint } from '../../model/branch';
 import type { Turn } from '../../model/types';
 import { preview } from '../../model/conversation';
@@ -29,10 +44,7 @@ function conversationUrl(id: string): string {
   return `https://chatgpt.com/c/${encodeURIComponent(id)}`;
 }
 
-function turnFor(
-  state: WorkingState,
-  point: BranchPoint,
-): Turn | undefined {
+function turnFor(state: WorkingState, point: BranchPoint): Turn | undefined {
   if (point.turnSequence === undefined) return undefined;
   return state.turns.find((t) => t.sequence === point.turnSequence);
 }
@@ -43,68 +55,103 @@ export function BranchBanner({ state, onGoToTurn }: Props) {
 
   return (
     <section className="branch-banner" aria-label="Branch points">
-      {branches.points.map((point, i) => {
-        const turn = turnFor(state, point);
-        const key = `${point.sourceConversationId ?? ''}-${point.turnSequence ?? i}`;
-        // The number the turn cards themselves show, so the two agree.
-        const displayNumber =
-          point.turnSequence !== undefined ? point.turnSequence + 1 : null;
-
-        return (
-          <div className="branch-point" key={key}>
-            <div className="row">
-              <strong style={{ fontSize: 12 }}>
-                {displayNumber === null
-                  ? 'Branched from another chat'
-                  : `Branch point: Turn ${displayNumber}`}
-              </strong>
-              <span className="spacer" />
-              {turn && (
-                <button
-                  type="button"
-                  className="btn small"
-                  onClick={() => onGoToTurn(turn.id)}
-                >
-                  Go to branch point
-                </button>
-              )}
-            </div>
-
-            {turn && (
-              <p className="branch-excerpt">
-                <span className="branch-role">
-                  {turn.role === 'user' ? 'You' : 'Assistant'}:
-                </span>{' '}
-                {preview(turn.workingText, 140)}
-              </p>
-            )}
-
-            <p className="hint">
-              {point.sourceConversationTitle
-                ? `This chat was branched from “${point.sourceConversationTitle}”.`
-                : 'This chat was branched from another conversation.'}{' '}
-              {point.confidence !== 'confirmed' && point.detail}
-            </p>
-
-            {/*
-              Offered only when ChatGPT gave a conversation id and did not say
-              the source belongs to someone else. The address is ChatGPT's own
-              route for a conversation — the same one Chat Threads reads to
-              identify which chat a tab is showing — not a guess.
-            */}
-            {point.sourceConversationId && !point.sourceConversationOwner && (
-              <a
-                className="btn link"
-                href={conversationUrl(point.sourceConversationId)}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                Open original conversation
-              </a>
-            )}
-          </div>
-        );
-      })}
+      {branches.points.map((point, i) => (
+        <BranchRow
+          key={`${point.sourceConversationId ?? ''}-${point.turnSequence ?? i}`}
+          point={point}
+          turn={turnFor(state, point)}
+          onGoToTurn={onGoToTurn}
+        />
+      ))}
     </section>
+  );
+}
+
+interface RowProps {
+  point: BranchPoint;
+  turn: Turn | undefined;
+  onGoToTurn: (turnId: string) => void;
+}
+
+function BranchRow({ point, turn, onGoToTurn }: RowProps) {
+  const [showDetails, setShowDetails] = useState(false);
+
+  // The number the turn cards themselves show, so the two agree.
+  const displayNumber =
+    point.turnSequence !== undefined ? point.turnSequence + 1 : null;
+  const canOpenSource =
+    point.sourceConversationId !== undefined && !point.sourceConversationOwner;
+
+  return (
+    <div className="branch-point">
+      <div className="branch-line">
+        <strong className="branch-title">
+          {displayNumber === null
+            ? 'Branched from another chat'
+            : `Branch point: Turn ${displayNumber}`}
+        </strong>
+        {turn && (
+          <button
+            type="button"
+            className="btn small branch-go"
+            onClick={() => onGoToTurn(turn.id)}
+          >
+            Go to branch point
+          </button>
+        )}
+      </div>
+
+      {turn && (
+        <p className="branch-excerpt">
+          <span className="branch-role">
+            {turn.role === 'user' ? 'You' : 'Assistant'}:
+          </span>{' '}
+          {preview(turn.workingText, 120)}
+        </p>
+      )}
+
+      <div className="branch-line">
+        <span className="branch-source">
+          {point.sourceConversationTitle
+            ? `Branched from “${point.sourceConversationTitle}”`
+            : 'Branched from another conversation'}
+        </span>
+        <button
+          type="button"
+          className="btn link branch-details-toggle"
+          aria-expanded={showDetails}
+          onClick={() => setShowDetails((v) => !v)}
+        >
+          {showDetails ? 'Hide' : 'Details'}
+        </button>
+      </div>
+
+      {/*
+        Explanation, not action. Collapsed by default so a sentence about how
+        the point was worked out cannot take permanent space away from the
+        workspace below.
+      */}
+      {showDetails && (
+        <div className="branch-details">
+          <p className="hint">{point.detail}</p>
+          {point.sourceConversationOwner && (
+            <p className="hint">
+              That conversation belongs to another account, so Chat Threads
+              cannot open it for you.
+            </p>
+          )}
+          {canOpenSource && (
+            <a
+              className="btn link"
+              href={conversationUrl(point.sourceConversationId!)}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Open original conversation
+            </a>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

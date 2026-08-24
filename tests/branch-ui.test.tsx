@@ -96,8 +96,11 @@ describe('the branch indicator', () => {
     expect(seen).toEqual(['chatgpt-3']);
   });
 
-  it('offers to open the original when it is the user\'s own', () => {
+  it('offers to open the original, under Details, when it belongs to the user', () => {
     mount(<BranchBanner state={state(chatgptBranched)} onGoToTurn={() => {}} />);
+
+    expect(container.querySelector('a')).toBeNull();
+    act(() => button('Details')!.click());
 
     const link = container.querySelector('a') as HTMLAnchorElement | null;
     expect(link?.textContent).toBe('Open original conversation');
@@ -113,10 +116,13 @@ describe('the branch indicator', () => {
     );
 
     expect(text()).toContain('Branch point');
+    act(() => button('Details')!.click());
+
     expect(container.querySelector('a')).toBeNull();
+    expect(text()).toMatch(/belongs to another account/i);
   });
 
-  it('says how it worked the point out when it had to infer it', () => {
+  it('says how it worked the point out, once asked', () => {
     mount(
       <BranchBanner
         state={state(chatgptBranchedNoMessageId)}
@@ -124,6 +130,10 @@ describe('the branch indicator', () => {
       />,
     );
 
+    // Not by default: it is an explanation, not an action.
+    expect(text()).not.toMatch(/not the exact message/i);
+
+    act(() => button('Details')!.click());
     expect(text()).toMatch(/not the exact message/i);
   });
 

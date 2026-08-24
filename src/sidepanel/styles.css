@@ -79,16 +79,81 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /*
+    Contain the column. Without this a child that refuses to shrink pushes the
+    document itself wider or taller, which is what produced both a horizontal
+    scrollbar and a Split workspace squeezed to nothing on a long conversation.
+  */
+  overflow: hidden;
+  min-width: 0;
 }
 
+/*
+  The tab content takes whatever height the header, tabs, branch summary and
+  footer leave, and scrolls inside it.
+
+  `min-height: 0` is the load-bearing line. A flex item defaults to
+  `min-height: auto`, which means "never shrink below your content" — so with
+  876 turns this box refused to shrink, the whole column overflowed, and the
+  fixed parts above it ate the panel. It is not an arbitrary height; it is
+  what lets `flex: 1` mean what it says.
+*/
 .scroll {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  /*
+    Nothing inside should be wider than the panel: text wraps, titles
+    truncate, and flex children below are given `min-width: 0` so they can.
+    This is the backstop for anything that slips through, and clips rather
+    than producing a panel-wide horizontal scrollbar.
+  */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   padding: 8px;
 }
 
+/*
+  Flex and grid children default to `min-width: auto`, which is their content's
+  intrinsic width. A long unbroken title, or an `<input>` (whose intrinsic
+  width is about twenty characters), then refuses to shrink and forces the
+  panel sideways. These are the containers that hold such things.
+*/
+.row,
+.turn-head,
+.topic-row,
+.meta,
+.branch-line {
+  min-width: 0;
+}
+
+.row > *,
+.topic-row > *,
+.branch-line > * {
+  min-width: 0;
+}
+
+input[type='text'],
+input[type='password'],
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* ---------- header ---------- */
+
+/*
+  The fixed furniture around the scrolling region. Each sizes to its content
+  and neither grows nor shrinks, so the height left over goes to `.scroll`.
+*/
+.header,
+.tabs,
+.footer-bar {
+  flex: 0 0 auto;
+  min-width: 0;
+}
 
 .header {
   padding: 10px 12px 8px;
@@ -126,6 +191,8 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  /* Truncation only takes effect if the flex item is allowed to shrink. */
+  min-width: 0;
 }
 
 .pill {
@@ -450,30 +517,98 @@ label {
 }
 
 /* ---------------------------------------------------------------- branch --
-   Where a conversation was branched into a new chat. The banner sits under
-   the tabs rather than in the scrolling list, so "Go to branch point" stays
-   reachable no matter how far the user has scrolled.
+   Where a conversation was branched into a new chat.
+
+   Sits under the tabs rather than inside the scrolling list, so "Go to branch
+   point" stays reachable however far the user has scrolled — and is kept to
+   three short lines, because on a real 876-turn conversation the first
+   version took a large share of a 400px-wide panel and left the workspace
+   below with almost nothing.
+
+   `flex: 0 0 auto` states that explicitly: this box is sized by its content
+   and never grows at the expense of the tab content.
 */
 .branch-banner {
+  flex: 0 0 auto;
+  min-width: 0;
   border-bottom: 1px solid var(--border);
   background: var(--bg-raised);
-  padding: 8px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  /*
+    A guard for the rare conversation with several branch points. One is
+    normal and never reaches this; four would otherwise start crowding the
+    panel again.
+  */
+  max-height: 30vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
-.branch-point .branch-excerpt {
-  margin: 4px 0 0;
+
+.branch-point + .branch-point {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.branch-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.branch-title {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Takes the space the title and button leave, and truncates inside it. */
+.branch-source {
+  flex: 1 1 auto;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-go {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.branch-details-toggle {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+}
+
+/* At most two lines of the turn, then an ellipsis. */
+.branch-excerpt {
+  margin: 0;
   font-size: 12px;
   color: var(--text-muted);
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.branch-point .branch-role {
+
+.branch-role {
   color: var(--text);
   font-weight: 600;
 }
-.branch-point .hint {
-  margin-top: 4px;
+
+.branch-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.branch-details .hint {
+  margin: 0;
 }
 
 /* The turn the branch was taken from, and the flash after jumping to it. */

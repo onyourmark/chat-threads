@@ -17,7 +17,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false,
     "noEmit": true,
-    "types": ["chrome", "vitest/globals"]
+    "types": ["chrome", "vitest/globals", "node"]
   },
   "include": ["src", "tests", "scripts", "*.ts", "*.mjs"]
 }
