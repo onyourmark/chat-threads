@@ -49,6 +49,14 @@ import { PromptsView } from './components/PromptsView';
 import { SplitView } from './components/SplitView';
 import { BranchBanner } from './components/BranchBanner';
 import type { TurnFocus } from './branch-view';
+import {
+  DEFAULT_ZOOM,
+  loadZoom,
+  saveZoom,
+  stepFrom,
+  zoomLabel,
+  ZOOM_STEPS,
+} from './zoom';
 
 type View = 'prompts' | 'clean' | 'split' | 'output';
 
@@ -71,6 +79,22 @@ export function App() {
    * for the same turn twice scrolls twice.
    */
   const [focus, setFocus] = useState<TurnFocus | null>(null);
+
+  /**
+   * The panel's own size control. Chrome's page zoom does not reach a side
+   * panel, so without this there is no way to make the panel bigger.
+   */
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  useEffect(() => {
+    void loadZoom().then(setZoom);
+  }, []);
+  const changeZoom = useCallback((direction: 1 | -1) => {
+    setZoom((current) => {
+      const next = stepFrom(current, direction);
+      if (next !== current) void saveZoom(next);
+      return next;
+    });
+  }, []);
 
   /**
    * The invocation we have already acted on. A click on the toolbar icon moves
@@ -251,7 +275,11 @@ export function App() {
       : null;
 
   return (
-    <div className="app">
+    /*
+      `zoom` scales every pixel dimension in the panel at once. It is applied
+      here rather than on `body` so the panel still fills the document.
+    */
+    <div className="app" style={{ zoom }}>
       <header className="header">
         <h1>Chat Threads</h1>
         <p className="tagline">Reshape your AI conversations.</p>
@@ -419,6 +447,31 @@ export function App() {
               `, ${stats(session.working).edited} edited`}
           </span>
           <span className="spacer" />
+          <div className="zoom" role="group" aria-label="Panel size">
+            <button
+              type="button"
+              className="btn small"
+              onClick={() => changeZoom(-1)}
+              disabled={zoom <= ZOOM_STEPS[0]}
+              aria-label="Make the panel smaller"
+              title="Make the panel smaller"
+            >
+              A−
+            </button>
+            <span className="zoom-value" aria-live="polite">
+              {zoomLabel(zoom)}
+            </span>
+            <button
+              type="button"
+              className="btn small"
+              onClick={() => changeZoom(1)}
+              disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]!}
+              aria-label="Make the panel bigger"
+              title="Make the panel bigger"
+            >
+              A+
+            </button>
+          </div>
           <button
             type="button"
             className="btn small"

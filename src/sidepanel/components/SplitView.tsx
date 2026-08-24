@@ -7,12 +7,11 @@
  * wins over whatever the model said.
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SHARED, UNASSIGNED } from '../../model/types';
 import {
   addTopic,
   clearTopics,
-  countAssignedTo,
   removeTopic,
   renameTopic,
   setAssignment,
@@ -51,7 +50,25 @@ export function SplitView({
   onClearNotes,
   focus = null,
 }: Props) {
-  const branchPoints = branchPointSequences(state.source.branches);
+  const branchPoints = useMemo(
+    () => branchPointSequences(state.source.branches),
+    [state.source.branches],
+  );
+
+  /*
+    One pass for every topic's count, rather than one pass per topic. With 876
+    turns and fifteen topics the difference is thirteen thousand comparisons on
+    every render, which is the sort of thing that makes a panel feel slow for
+    no visible reason.
+  */
+  const counts = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const turn of state.turns) {
+      if (!turn.included) continue;
+      out.set(turn.assignment, (out.get(turn.assignment) ?? 0) + 1);
+    }
+    return out;
+  }, [state.turns]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const hasProposal = state.topics.some((t) => t.fromProposal);
   const builtIn = state.topics.find((t) => t.builtIn);
@@ -80,17 +97,16 @@ export function SplitView({
       {state.topics.length > 0 && (
         <div className="topic-list">
           {state.topics.map((topic, i) => {
-            const count = countAssignedTo(state, topic.id);
+            const count = counts.get(topic.id) ?? 0;
             return (
               <div className="topic-card" key={topic.id}>
                 <div className="topic-row">
                   <span className="topic-index">{i + 1}</span>
-                  <input
-                    type="text"
+                  <TopicNameInput
+                    label={`Name of topic ${i + 1}`}
                     value={topic.name}
-                    aria-label={`Name of topic ${i + 1}`}
-                    onChange={(e) =>
-                      onChange(renameTopic(state, topic.id, e.target.value))
+                    onCommit={(name) =>
+                      onChange(renameTopic(state, topic.id, name))
                     }
                   />
                   <button
@@ -237,5 +253,63 @@ export function SplitView({
         </TurnCard>
       ))}
     </>
+  );
+}
+
+/**
+ * A topic name box that stays responsive on a long conversation.
+ *
+ * Renaming a topic through `onChange` on every keystroke re-renders the whole
+ * turn list — 876 cards, each with a fifteen-option dropdown — so typing a
+ * word could take seconds to appear. The text lives here while it is being
+ * typed and is handed up when the user pauses or leaves the field, which
+ * changes nothing about the result and everything about how it feels.
+ */
+function TopicNameInput({
+  value,
+  label,
+  onCommit,
+}: {
+  value: string;
+  label: string;
+  onCommit: (name: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const committed = useRef(value);
+
+  // Follow the outside world when it changes for another reason — a proposal
+  // being applied, or Reset Changes — but never while the user is mid-word.
+  useEffect(() => {
+    if (value !== committed.current) {
+      committed.current = value;
+      setDraft(value);
+    }
+  }, [value]);
+
+  const commit = (next: string) => {
+    if (next === committed.current) return;
+    committed.current = next;
+    onCommit(next);
+  };
+
+  // A pause counts as finishing: the name updates as you would expect, without
+  // a render for every letter.
+  useEffect(() => {
+    if (draft === committed.current) return;
+    const timer = setTimeout(() => commit(draft), 400);
+    return () => clearTimeout(timer);
+  });
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      aria-label={label}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => commit(draft)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit(draft);
+      }}
+    />
   );
 }

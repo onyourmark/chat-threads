@@ -64,6 +64,22 @@ type Status =
  * it is moving and roughly how far along it is, without being told anything
  * about how the work is divided up internally.
  */
+/**
+ * Roughly how long a sectioned run takes, in words.
+ *
+ * From the one live measurement there is: fifteen discovery requests on an
+ * 876-turn conversation took about 55 seconds, so a request averages a few
+ * seconds and a whole run — both passes over every section, plus the merge —
+ * is several minutes. Deliberately a range rather than a number, because it
+ * depends on the model and on how busy the provider is. A user who has been
+ * told "about four to seven minutes" does not sit wondering whether it hung.
+ */
+function minutes(plan: { requests: number }): string {
+  const low = Math.max(1, Math.round((plan.requests * 3.5) / 60));
+  const high = Math.max(low + 1, Math.round((plan.requests * 8) / 60));
+  return `${low}–${high} minutes`;
+}
+
 function progressText(progress: AnalysisProgress | null): string {
   if (!progress) return 'Finding topics…';
   switch (progress.phase) {
@@ -256,8 +272,11 @@ export function FindTopics({ state, onProposal }: Props) {
               the same host, one after another, with nothing else in between.
               If a reply comes back in the wrong shape that step is asked once
               more, so at the very worst it is {plan.maxRequests}. You still
-              get one set of topics for the whole conversation. It will take a
-              few minutes, and you can stop it at any time.
+              get one set of topics for the whole conversation.
+              <br />
+              <strong>Expect it to take about {minutes(plan)}.</strong> The
+              panel stays usable while it runs, and you can stop it at any
+              time.
             </p>
           )}
 
@@ -325,7 +344,7 @@ export function FindTopics({ state, onProposal }: Props) {
           {status.kind === 'done' && (
             <div className="status ok" role="status">
               Suggested {status.topics} topic
-              {status.topics === 1 ? '' : 's'}. Review them below.
+              {status.topics === 1 ? '' : 's'}. Review them above.
             </div>
           )}
         </div>

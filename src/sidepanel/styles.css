@@ -148,6 +148,19 @@ textarea {
   The fixed furniture around the scrolling region. Each sizes to its content
   and neither grows nor shrinks, so the height left over goes to `.scroll`.
 */
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.zoom-value {
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .header,
 .tabs,
 .footer-bar {
@@ -405,6 +418,20 @@ label {
 /* ---------- turn rows ---------- */
 
 .turn {
+  /*
+    Skip layout and painting for cards that are off screen.
+
+    A long conversation is hundreds of these, each with its own text and a
+    dropdown of every topic, and the browser was doing full layout for all of
+    them on every scroll — which is what made scrolling choppy and typing feel
+    stuck. `content-visibility` leaves the elements in the document, so find,
+    focus and "Go to branch point" all still reach them; it only defers the
+    work of drawing what nobody is looking at. `contain-intrinsic-size: auto`
+    remembers each card's real height once it has been seen, so the scrollbar
+    stops guessing.
+  */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--user);
   border-radius: var(--radius);
